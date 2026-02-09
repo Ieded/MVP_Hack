@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+@layer theme {
+    :root {
+        /* Background Colors - Dark Tech Theme */
+        --color-bg-primary: 0 0 0;
+        --color-bg-secondary: 10 15 13;
+        --color-bg-tertiary: 17 24 22;
+
+        /* Neon Green Brand */
+        --color-neon: 0 255 133;
+        --color-neon-bright: 0 255 170;
+        --color-neon-dim: 0 204 106;
+
+        /* Text Colors */
+        --color-text: 255 255 255;
+    }
+}
+
+@layer base {
+    * {
+        border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    body {
+        background: rgb(0 0 0);
+        color: rgba(255 255 255 / 0.95);
+        font-family: 'Pretendard', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+        overflow-x: hidden;
+    }
+}
