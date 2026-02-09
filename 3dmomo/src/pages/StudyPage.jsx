@@ -17,34 +17,75 @@ import {
 /* -------------------------------------------------------------------------- */
 
 // 카메라 상태 저장 및 복구
+const MODEL_VIEW_CONFIGS = {
+    '1': { pos: [-0.5, 0.4, -0.5], target: [0.1, 0, 0] },
+    '2': { pos: [0.9, 0.7, 0.6], target: [0.1, 0.2, 0] },
+    '3': { pos: [-0.3, 0.5, -0.3], target: [-0.1, 0.05, 0] },
+    '4': { pos: [1.0, 0.8, -0.9], target: [0.1, 0.25, 0] },
+    '5': { pos: [0.3, 0.3, 0.3], target: [0, 0.02, 0] },
+    '6': { pos: [0.7, 0.4, 0.25], target: [0.3, 0.2, 0.1] },
+    '7': { pos: [0.7, 0.7, 0.7], target: [0.3, 0.3, 0] },
+    // ... 나머지 5개 모델의 설정 추가
+    'default': { pos: [0.8, 0.8, 0.8], target: [0, 0, 0] } // 기본값
+};
+
+// 2. CameraPersister 컴포넌트 수정
+// 2. CameraPersister 컴포넌트 (StudyPage.jsx 내부)
+// 2. CameraPersister 컴포넌트 (StudyPage.jsx 내부)
+// 2. CameraPersister 컴포넌트
 function CameraPersister({ modelId, shouldReset, onResetComplete }) {
     const { camera } = useThree();
     const controls = useThree((state) => state.controls);
+
+    // 💡 1. 추가: 마지막으로 적용된 모델 ID 기억 (스토리지 로직 제어용)
+    const lastModelId = useRef(modelId);
     const saveTimeout = useRef(null);
 
+    // 🔴 1. [우선순위 높음] 하드코딩된 값 적용 (모델 변경 시마다 실행)
     useEffect(() => {
-        if (shouldReset && controls) {
-            camera.position.set(0.8, 0.8, 0.8);
-            controls.target.set(0, 0, 0);
-            controls.update();
+        if (!controls) return;
+
+        console.log("Forcing hardcoded view for model:", modelId);
+        const config = MODEL_VIEW_CONFIGS[modelId] || MODEL_VIEW_CONFIGS['default'];
+
+        // 카메라/컨트롤 위치 강제 설정
+        camera.position.set(...config.pos);
+        controls.target.set(...config.target);
+
+        // 💡 중요: 위치 변경 즉시 반영
+        controls.update();
+        camera.updateProjectionMatrix();
+
+        if (shouldReset) {
             onResetComplete();
         }
-    }, [shouldReset, camera, controls, onResetComplete]);
 
+        // 💡 중요: 적용 완료 후 lastModelId 갱신
+        lastModelId.current = modelId;
+    }, [modelId, camera, controls, shouldReset, onResetComplete]);
+
+    // 🔴 2. [우선순위 낮음] 로컬 스토리지 데이터 복구 (조건부)
     useEffect(() => {
+        // 💡 중요: 하드코딩값이 적용된 직후에만 실행되도록,
+        // 💡 lastModelId.current !== modelId 조건을 통해 모델 변경 시점엔 복구하지 않음
+        if (!controls || shouldReset || lastModelId.current !== modelId) return;
+
         const savedData = localStorage.getItem(`cameraState_${modelId}`);
-        if (savedData && controls && !shouldReset) {
+        if (savedData) {
             try {
+                console.log("Restoring saved state for model:", modelId);
                 const { position, target } = JSON.parse(savedData);
                 camera.position.set(position.x, position.y, position.z);
                 controls.target.set(target.x, target.y, target.z);
                 controls.update();
+                camera.updateProjectionMatrix();
             } catch (e) {
                 console.error("카메라 상태 복구 실패:", e);
             }
         }
-    }, [modelId, camera, controls]);
+    }, [modelId, controls, shouldReset, camera]);
 
+    // 🔴 3. [유지] 카메라 상태 자동 저장
     useEffect(() => {
         if (!controls) return;
         const onChange = () => {
@@ -55,7 +96,8 @@ function CameraPersister({ modelId, shouldReset, onResetComplete }) {
                     target: { x: controls.target.x, y: controls.target.y, z: controls.target.z }
                 };
                 localStorage.setItem(`cameraState_${modelId}`, JSON.stringify(stateToSave));
-            }, 500);
+                console.log("Camera state saved");
+            }, 300);
         };
         controls.addEventListener('change', onChange);
         return () => {
@@ -63,6 +105,7 @@ function CameraPersister({ modelId, shouldReset, onResetComplete }) {
             if (saveTimeout.current) clearTimeout(saveTimeout.current);
         };
     }, [modelId, camera, controls]);
+
     return null;
 }
 
@@ -1553,13 +1596,13 @@ export default function StudyPage() {
 
                     <div className="flex-1 relative">
                         <Canvas
-                            shadows
-                            camera={{ position: [0.8, 0.8, 0.8], fov: 35 }}
-                            className="bg-transparent"
-                            gl={{ preserveDrawingBuffer: true }}
-                            onPointerMissed={(e) => {
-                                if (e.type === 'click') setSelectedId(null);
-                            }}
+                        	shadows
+                                camera={{ fov: 35 }}
+                                className="bg-transparent"
+                                gl={{ preserveDrawingBuffer: true }}
+                                onPointerMissed={(e) => {
+                        		if (e.type === 'click') setSelectedId(null);
+                                }}
                         >
                             <Suspense fallback={null}>
                                 <CameraPersister
