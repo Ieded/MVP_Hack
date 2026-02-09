@@ -16,13 +16,12 @@ import {
 /* 3D 관련 컴포넌트 (카메라 저장, 드래그 등)                                  */
 /* -------------------------------------------------------------------------- */
 
-// 카메라 상태 저장 및 복구
 const MODEL_VIEW_CONFIGS = {
     '1': { pos: [-0.5, 0.4, -0.5], target: [0.1, 0, 0] },
     '2': { pos: [0.9, 0.7, 0.6], target: [0.1, 0.2, 0] },
     '3': { pos: [-0.3, 0.5, -0.3], target: [-0.1, 0.05, 0] },
     '4': { pos: [1.0, 0.8, -0.9], target: [0.1, 0.25, 0] },
-    '5': { pos: [0.3, 0.3, 0.3], target: [0, 0.02, 0] },
+    '5': { pos: [0, 0, 0.5], target: [0, 0.05, 0] },
     '6': { pos: [0.7, 0.4, 0.25], target: [0.3, 0.2, 0.1] },
     '7': { pos: [0.7, 0.7, 0.7], target: [0.3, 0.3, 0] },
     // ... 나머지 5개 모델의 설정 추가
@@ -37,38 +36,42 @@ function CameraPersister({ modelId, shouldReset, onResetComplete }) {
     const { camera } = useThree();
     const controls = useThree((state) => state.controls);
 
-    // 💡 1. 추가: 마지막으로 적용된 모델 ID 기억 (스토리지 로직 제어용)
-    const lastModelId = useRef(modelId);
+    // 💡 각 모델별로 하드코딩된 값이 적용되었는지 기억하는 ref
+    const hasAppliedHardcoded = useRef({});
     const saveTimeout = useRef(null);
 
-    // 🔴 1. [우선순위 높음] 하드코딩된 값 적용 (모델 변경 시마다 실행)
+    // 🔴 1. [우선순위 높음] 하드코딩된 값 적용
     useEffect(() => {
         if (!controls) return;
 
-        console.log("Forcing hardcoded view for model:", modelId);
+        // 💡 만약 이 모델이 이전에 하드코딩 값을 적용받았고,
+        // 💡 강제 초기화(shouldReset) 상황이 아니라면 하드코딩 적용 안 함
+        if (hasAppliedHardcoded.current[modelId] && !shouldReset) {
+            return;
+        }
+
+        console.log("Applying hardcoded view for model:", modelId);
         const config = MODEL_VIEW_CONFIGS[modelId] || MODEL_VIEW_CONFIGS['default'];
 
-        // 카메라/컨트롤 위치 강제 설정
         camera.position.set(...config.pos);
         controls.target.set(...config.target);
 
-        // 💡 중요: 위치 변경 즉시 반영
         controls.update();
         camera.updateProjectionMatrix();
 
+        // 💡 이 모델은 이제 하드코딩 값을 적용받은 상태로 표시
+        hasAppliedHardcoded.current[modelId] = true;
+
         if (shouldReset) {
             onResetComplete();
+            // 필요하다면 리셋 시 다시 하드코딩 적용되도록 false로 바꿀 수 있습니다.
+            // hasAppliedHardcoded.current[modelId] = false;
         }
-
-        // 💡 중요: 적용 완료 후 lastModelId 갱신
-        lastModelId.current = modelId;
     }, [modelId, camera, controls, shouldReset, onResetComplete]);
 
     // 🔴 2. [우선순위 낮음] 로컬 스토리지 데이터 복구 (조건부)
     useEffect(() => {
-        // 💡 중요: 하드코딩값이 적용된 직후에만 실행되도록,
-        // 💡 lastModelId.current !== modelId 조건을 통해 모델 변경 시점엔 복구하지 않음
-        if (!controls || shouldReset || lastModelId.current !== modelId) return;
+        if (!controls || shouldReset) return;
 
         const savedData = localStorage.getItem(`cameraState_${modelId}`);
         if (savedData) {
@@ -85,7 +88,7 @@ function CameraPersister({ modelId, shouldReset, onResetComplete }) {
         }
     }, [modelId, controls, shouldReset, camera]);
 
-    // 🔴 3. [유지] 카메라 상태 자동 저장
+    // 🔴 3. [유지] 카메라 상태 자동 저장 (기존과 동일)
     useEffect(() => {
         if (!controls) return;
         const onChange = () => {
@@ -347,946 +350,156 @@ export default function StudyPage() {
 
     // 모델 데이터
     const MODEL_DATA = {
-    "1": {
-        name: "Drone",
-        parts: [
-            { 
-                id: "Main_Frame", 
-                url: "/models/Drone/메인 프레임.glb", 
-                defaultPos: [0, 0.1, 0], 
-                direction: [0, 0, 0], 
-                rotation: [-1.5646, 0, 0], 
-                description: "재질: 탄소 섬유 강화 플라스틱 (CFRP)\n\n드론의 뼈대가 되는 메인 프레임입니다. 가볍지만 강철보다 강한 강성을 가지고 있어 비행 중 발생하는 진동과 충격을 효과적으로 견딥니다."
-            },
-            { 
-                id: "Main_Frame_Mirror", 
-                url: "/models/Drone/메인 프레임 좌우대칭형.glb", 
-                defaultPos: [0, 0.1, 0], 
-                direction: [0, 0.2, 0], 
-                rotation: [-1.5646, 0, 0], 
-                description: "재질: 탄소 섬유 강화 플라스틱 (CFRP)\n\n메인 프레임의 하단부로, 상단 프레임과 결합하여 내부의 전자 장비(FC, ESC, 배터리)를 보호하는 샌드위치 구조를 형성합니다."
-            },
-            { 
-                id: "Arm_Gear_LF", 
-                url: "/models/Drone/접이식 암 기어.glb", 
-                defaultPos: [-0.0812, 0.0888, -0.1776], 
-                direction: [0, 0.2, 0], 
-                rotation: [0, 0, 0], 
-                description: "재질: 고강도 엔지니어링 플라스틱 (PA66)\n\n좌측 전방(Front-Left) 모터를 지지하는 암(Arm)입니다. 접이식 구조로 설계되어 운반 시 부피를 줄일 수 있으며 비행 시에는 단단히 고정됩니다."
-            },
-            { 
-                id: "Arm_Gear_RF", 
-                url: "/models/Drone/접이식 암 기어.glb", 
-                defaultPos: [0.0812, 0.0888, -0.1776], 
-                direction: [0, 0.2, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 고강도 엔지니어링 플라스틱 (PA66)\n\n우측 전방(Front-Right) 모터를 지지하는 암입니다. 모터의 진동이 메인 프레임으로 전달되는 것을 최소화하는 구조적 특징을 가집니다."
-            },
-            { 
-                id: "Arm_Gear_LB", 
-                url: "/models/Drone/접이식 암 기어.glb", 
-                defaultPos: [-0.0974, 0.0882, 0.0148], 
-                direction: [0, 0.2, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 고강도 엔지니어링 플라스틱 (PA66)\n\n좌측 후방(Rear-Left) 암입니다. 드론의 대각선 축 길이를 결정하여 비행 안정성에 직접적인 영향을 미칩니다."
-            },
-            { 
-                id: "Arm_Gear_RB", 
-                url: "/models/Drone/접이식 암 기어.glb", 
-                defaultPos: [0.0974, 0.0882, 0.0148], 
-                direction: [0, 0.2, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 고강도 엔지니어링 플라스틱 (PA66)\n\n우측 후방(Rear-Right) 암입니다. 4개의 암이 정확한 대칭을 이루어야 호버링(정지 비행) 시 기체가 한쪽으로 쏠리지 않습니다."
-            },
-            { 
-                id: "Gearing_Unit_LF", 
-                url: "/models/Drone/기어 세트.glb", 
-                defaultPos: [-0.0733, 0.0834, -0.1667], 
-                direction: [0, 0.2, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 폴리아세탈 (POM)\n\n모터의 회전력을 프로펠러로 전달하는 기어 유닛입니다. 마찰 계수가 낮은 POM 소재를 사용하여 동력 손실을 최소화합니다."
-            },
-            { 
-                id: "Gearing_Unit_RF", 
-                url: "/models/Drone/기어 세트.glb", 
-                defaultPos: [0.0733, 0.0834, -0.1667], 
-                direction: [0, 0.2, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 폴리아세탈 (POM)\n\n우측 전방 기어 세트입니다. 정밀하게 가공된 기어 톱니는 소음을 줄이고 에너지 전달 효율을 극대화합니다."
-            },
-            { 
-                id: "Gearing_Unit_LB", 
-                url: "/models/Drone/기어 세트.glb", 
-                defaultPos: [-0.0850, 0.0824, 0.0093], 
-                direction: [0, 0.2, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 폴리아세탈 (POM)\n\n좌측 후방 기어 세트입니다. 비행 중 지속적인 고속 회전 마찰을 견딜 수 있도록 내마모성이 우수한 소재가 사용됩니다."
-            },
-            { 
-                id: "Gearing_Unit_RB", 
-                url: "/models/Drone/기어 세트.glb", 
-                defaultPos: [0.0850, 0.0824, 0.0093], 
-                direction: [0, 0.2, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 폴리아세탈 (POM)\n\n우측 후방 기어 세트입니다. 기어의 맞물림(Backlash)이 적절해야 부드러운 비행이 가능합니다."
-            },
-            { 
-                id: "Beater_Disc", 
-                url: "/models/Drone/로터 플레이트.glb", 
-                defaultPos: [0.0000, 0.1009, -0.1637], 
-                direction: [0, 0.1, 0], 
-                rotation: [-0.0000, -1.5463, 1.5650],
-                description: "재질: 알루미늄 합금 (6061)\n\n프로펠러와 모터 축을 연결하는 로터 허브 플레이트입니다. 고속 회전 시 원심력을 견디며 블레이드를 단단히 고정합니다."
-            },
-            { 
-                id: "Impellar_Blade_LF", 
-                url: "/models/Drone/프로펠러 블레이드.glb", 
-                defaultPos: [-0.0809, 0.1091, -0.1778], 
-                direction: [0, 0.3, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 폴리카보네이트 (Polycarbonate)\n\n공기 역학적으로 설계된 프로펠러 블레이드입니다. 시계 방향(CW) 또는 반시계 방향(CCW)으로 회전하며 양력을 발생시킵니다."
-            },
-            { 
-                id: "Impellar_Blade_RF", 
-                url: "/models/Drone/프로펠러 블레이드.glb", 
-                defaultPos: [0.0809, 0.1091, -0.1778], 
-                direction: [0, 0.3, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 폴리카보네이트 (Polycarbonate)\n\n우측 전방 프로펠러입니다. 드론은 대각선에 위치한 프로펠러끼리 같은 방향으로 회전하여 토크(Torque)를 상쇄시킵니다."
-            },
-            { 
-                id: "Impellar_Blade_LB", 
-                url: "/models/Drone/프로펠러 블레이드.glb", 
-                defaultPos: [-0.0975, 0.1085, 0.0147], 
-                direction: [0, 0.3, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 폴리카보네이트 (Polycarbonate)\n\n좌측 후방 프로펠러입니다. 끝부분의 윙렛(Winglet) 설계는 와류(Vortex)를 줄여 비행 소음을 감소시키고 효율을 높입니다."
-            },
-            { 
-                id: "Impellar_Blade_RB", 
-                url: "/models/Drone/프로펠러 블레이드.glb", 
-                defaultPos: [0.0975, 0.1085, 0.0147], 
-                direction: [0, 0.3, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 폴리카보네이트 (Polycarbonate)\n\n우측 후방 프로펠러입니다. 충격에 강한 폴리카보네이트 소재를 사용하여 파손 위험을 줄였습니다."
-            },
-            { 
-                id: "Support_Leg_LF", 
-                url: "/models/Drone/랜딩 레그.glb", 
-                defaultPos: [-0.0812, 0.1000, -0.1776], 
-                direction: [0, 0.1, 0], 
-                rotation: [0.0000, 0.6391, 0.0000],
-                description: "재질: 열가소성 폴리우레탄 (TPU)\n\n착륙 시 지면과의 충격을 완화하고 기체 하단부의 카메라나 센서를 보호하는 연질 랜딩 기어입니다."
-            },
-            { 
-                id: "Support_Leg_RF", 
-                url: "/models/Drone/랜딩 레그.glb", 
-                defaultPos: [0.0812, 0.1000, -0.1776], 
-                direction: [0, 0.1, 0], 
-                rotation: [0.0000, -0.6391, 0.0000],
-                description: "재질: 열가소성 폴리우레탄 (TPU)\n\n우측 전방 랜딩 레그입니다. 마찰력이 높은 소재를 사용하여 경사지나 미끄러운 표면에서도 안정적인 이착륙을 돕습니다."
-            },
-            { 
-                id: "Support_Leg_LB", 
-                url: "/models/Drone/랜딩 레그.glb", 
-                defaultPos: [-0.0973, 0.0990, 0.0146], 
-                direction: [0, 0.1, 0], 
-                rotation: [-3.1416, 1.1787, -3.1416],
-                description: "재질: 열가소성 폴리우레탄 (TPU)\n\n좌측 후방 랜딩 레그입니다. 탄성이 있어 반복적인 착륙 충격에도 파손되지 않도록 설계되었습니다."
-            },
-            { 
-                id: "Support_Leg_RB", 
-                url: "/models/Drone/랜딩 레그.glb", 
-                defaultPos: [0.0973, 0.0990, 0.0146], 
-                direction: [0, 0.1, 0], 
-                rotation: [-3.1416, -1.1787, -3.1416],
-                description: "재질: 열가소성 폴리우레탄 (TPU)\n\n우측 후방 랜딩 레그입니다. 기체의 무게 중심을 고려하여 배치되었으며 안정적인 지지를 제공합니다."
-            },
-            { 
-                id: "Fixing_Screw_LF", 
-                url: "/models/Drone/체결 나사.glb", 
-                defaultPos: [-0.0515, 0.0948, -0.1369], 
-                direction: [0, -0.1, 0], 
-                rotation: [0.0000, 0.0000, -3.15],
-                description: "재질: 스테인리스 스틸 (SUS304)\n\n부품들을 결합하는 고장력 나사입니다. 비행 진동에 의해 풀리지 않도록 나사산에 풀림 방지 처리가 되어 있습니다."
-            },
-            { 
-                id: "Fixing_Screw_RF", 
-                url: "/models/Drone/체결 나사.glb", 
-                defaultPos: [0.0515, 0.0948, -0.1369], 
-                direction: [0, -0.1, 0], 
-                rotation: [0.0000, 0.0000, -3.15],
-                description: "재질: 스테인리스 스틸 (SUS304)\n\n우측 전방 부품 고정 나사입니다. 부식에 강한 스테인리스 소재를 사용하여 야외 비행 환경에 적합합니다."
-            },
-            { 
-                id: "Fixing_Screw_LB", 
-                url: "/models/Drone/체결 나사.glb", 
-                defaultPos: [0.0513, 0.0939, -0.0051], 
-                direction: [0, -0.1, 0], 
-                rotation: [0.0000, 0.0000, -3.15],
-                description: "재질: 스테인리스 스틸 (SUS304)\n\n후방 부품 결합용 나사입니다. 정밀한 체결력을 유지하기 위해 규격에 맞는 도구를 사용해야 합니다."
-            },
-            { 
-                id: "Fixing_Screw_RB", 
-                url: "/models/Drone/체결 나사.glb", 
-                defaultPos: [-0.0513, 0.0939, -0.0051], 
-                direction: [0, -0.1, 0], 
-                rotation: [0.0000, 0.0000, -3.15],
-                description: "재질: 스테인리스 스틸 (SUS304)\n\n우측 후방 고정 나사입니다. 작은 부품이지만 기체의 전체적인 결합 강성을 유지하는 중요한 역할을 합니다."
-            },
-            { 
-                id: "Fixing_Nut_LF", 
-                url: "/models/Drone/프로펠러 고정 너트.glb", 
-                defaultPos: [-0.0514, 0.1061, -0.1372], 
-                direction: [0, 0.4, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 알루미늄 합금 (아노다이징 처리)\n\n프로펠러가 고속 회전 중에도 이탈하지 않도록 고정하는 너트입니다. 회전 방향과 반대로 조여지는 역나사 방식이 적용될 수 있습니다."
-            },
-            { 
-                id: "Fixing_Nut_RF", 
-                url: "/models/Drone/프로펠러 고정 너트.glb", 
-                defaultPos: [0.0514, 0.1061, -0.1372], 
-                direction: [0, 0.4, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 알루미늄 합금 (아노다이징 처리)\n\n우측 전방 프로펠러 고정 너트입니다. 비행 전 항상 조임 상태를 점검해야 하는 안전 필수 부품입니다."
-            },
-            { 
-                id: "Fixing_Nut_LB", 
-                url: "/models/Drone/프로펠러 고정 너트.glb", 
-                defaultPos: [-0.0514, 0.1061, -0.0048], 
-                direction: [0, 0.4, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 알루미늄 합금 (아노다이징 처리)\n\n좌측 후방 너트입니다. 모터의 회전 방향(CW/CCW)을 구분하기 위해 색상을 다르게 적용하기도 합니다."
-            },
-            { 
-                id: "Fixing_Nut_RB", 
-                url: "/models/Drone/프로펠러 고정 너트.glb", 
-                defaultPos: [0.0514, 0.1061, -0.0048], 
-                direction: [0, 0.4, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 알루미늄 합금 (아노다이징 처리)\n\n우측 후방 너트입니다. 경량화를 위해 알루미늄 소재를 사용하며 내식성을 위해 아노다이징 처리되었습니다."
-            },
-            { 
-                id: "xyz", 
-                url: "/models/Drone/모터 하우징.glb", 
-                defaultPos: [0.0001, 0.0833, -0.0786], 
-                direction: [0, 0.1, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 내열 ABS 플라스틱\n\n모터를 보호하고 내부의 열을 방출하는 하우징 커버입니다. 먼지나 이물질 유입을 막아 모터 수명을 연장시킵니다."
-            },
-        ]
-    },
-    "2": {
-        name: "LeafSpring",
-        parts: [
-            { 
-                id: "Chassis", 
-                url: "/models/LeafSpring/섀시 서포트 브라켓.glb", 
-                defaultPos: [-0.0064, 0.2511, -0.6397], 
-                direction: [0, 0.6, 0], 
-                rotation: [3.1402, 0.0000, 0.0000],
-                description: "재질: 구조용 강철 (Structural Steel)\n\n차량의 프레임에 연결되는 섀시 서포트입니다. 판스프링 시스템 전체를 차체에 고정하며 하중을 전달받는 주요 구조물입니다."
-            },
-            { 
-                id: "Chassis_Rigid", 
-                url: "/models/LeafSpring/섀시 고정 서포트.glb", 
-                defaultPos: [-0.0081, 0.1658, 0.4534], 
-                direction: [0, 0.6, 0], 
-                rotation: [-3.1381, 0.0000, 0.0000],
-                description: "재질: 구조용 강철 (Structural Steel)\n\n판스프링의 반대쪽 끝을 차체에 고정하는 서포트입니다. 주행 중 발생하는 비틀림 강성을 견딜 수 있도록 설계되었습니다."
-            },
-            { 
-                id: "Leaf_Layer", 
-                url: "/models/LeafSpring/판스프링 리프.glb", 
-                defaultPos: [0, 0.13, 0], 
-                direction: [0, 0.4, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 스프링강 (Spring Steel, SUP9)\n\n탄성이 뛰어난 금속 판들을 겹쳐 만든 리프(Leaf) 묶음입니다. 충격을 흡수하고 차량의 무게를 지탱하는 핵심 서스펜션 부품입니다."
-            },
-            { 
-                id: "Clamp_Center", 
-                url: "/models/LeafSpring/센터 클램프.glb", 
-                defaultPos: [0.0798, 0.0535, -0.0008], 
-                direction: [0, 0, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 탄소강 (Carbon Steel)\n\n여러 겹의 스프링 판들이 흩어지지 않도록 중앙에서 강력하게 잡아주는 센터 클램프입니다. 차축(Axle)과 연결되는 부위이기도 합니다."
-            },
-            { 
-                id: "Clamp_Primary_L", 
-                url: "/models/LeafSpring/메인 클램프.glb", 
-                defaultPos: [0.0837, 0.0632, 0.1287], 
-                direction: [0, 0.8, 1.2], 
-                rotation: [-0.0650, 0.0000, 0.0000],
-                description: "재질: 탄소강 (Carbon Steel)\n\n스프링의 좌측 부분을 고정하는 메인 U-볼트 클램프입니다. 수직 하중뿐만 아니라 주행 시 발생하는 전단력을 지지합니다."
-            },
-            { 
-                id: "Clamp_Primary_R", 
-                url: "/models/LeafSpring/메인 클램프.glb", 
-                defaultPos: [0.0837, 0.0632, -0.1287], 
-                direction: [0, 0.8, -1.4], 
-                rotation: [0.0650, 0.0000, 0.0000],
-                description: "재질: 탄소강 (Carbon Steel)\n\n스프링의 우측 부분을 고정하는 메인 U-볼트 클램프입니다. 판스프링이 차축에서 이탈하지 않도록 견고하게 잡아줍니다."
-            },
-            { 
-                id: "Clamp_Secondary_L", 
-                url: "/models/LeafSpring/보조 클램프.glb", 
-                defaultPos: [0.0835, 0.0928, 0.2816], 
-                direction: [0, 0.8, 1.2], 
-                rotation: [-0.1597, 0.0000, 0.0000],
-                description: "재질: 연강 (Mild Steel)\n\n스프링 판들이 상하 운동을 할 때 옆으로 틀어지는 것을 방지하는 보조 클램프(리바운드 클립)입니다."
-            },
-            { 
-                id: "Clamp_Secondary_R", 
-                url: "/models/LeafSpring/보조 클램프.glb", 
-                defaultPos: [0.0837, 0.0961, -0.2731], 
-                direction: [0, 0.8, -1.4], 
-                rotation: [0.1597, 0.0000, 0.0000],
-                description: "재질: 연강 (Mild Steel)\n\n우측 보조 클램프입니다. 급격한 코너링이나 험로 주행 시 스프링 잎들의 정렬 상태를 유지시켜 줍니다."
-            },
-            { 
-                id: "SupportL", 
-                url: "/models/LeafSpring/서포트 브라켓.glb", 
-                defaultPos: [0.0775, 0.2105, -0.5994], 
-                direction: [0.1, 0, 0], 
-                rotation: [1.9142, -1.5582, 3.1416],
-                description: "재질: 주강 (Cast Steel)\n\n판스프링의 끝단과 차체를 연결하는 브라켓입니다. 스프링이 눌릴 때 길이가 변할 수 있도록 유동적인 움직임을 허용하는 구조입니다."
-            },
-            { 
-                id: "SupportR", 
-                url: "/models/LeafSpring/서포트 브라켓.glb", 
-                defaultPos: [-0.0006, 0.2562, -0.5829], 
-                direction: [-0.1, 0, 0], 
-                rotation: [1.9142, 1.5582, 3.1416],
-                description: "재질: 주강 (Cast Steel)\n\n반대쪽 고정 브라켓입니다. 스프링의 상하 운동을 지지하며 차체로 전달되는 충격을 1차적으로 받아냅니다."
-            },
-            { 
-                id: "Rubber", 
-                url: "/models/LeafSpring/고무 부싱.glb", 
-                defaultPos: [0.0074, 0.2494, -0.6404], 
-                direction: [0, 0, -0.1], 
-                rotation: [0, 0, 0],
-                description: "재질: 강화 고무 또는 우레탄\n\n금속 부품 간의 마찰과 소음을 줄이고 미세한 진동을 흡수하는 고무 부싱(Bushing)입니다. 승차감을 개선하는 중요한 부품입니다."
-            },
-        ]
-    },
-    "3": {
-        name: "MachineVice",
-        parts: [
-            { 
-                id: "Fuhrung", 
-                url: "/models/MachineVice/슬라이드 가이드 블록.glb", 
-                defaultPos: [-0.1601, 0.1301, -0.0107], 
-                direction: [0, 0.1, 0], 
-                rotation: [-1.5724, 0.0000, 0.0000],
-                description: "재질: 합금강 (Alloy Steel)\n\n이동 죠(Moving Jaw)가 흔들림 없이 직선으로 움직이도록 안내하는 가이드 블록입니다. 정밀 가공 시 오차를 줄여줍니다."
-            },
-            { 
-                id: "Part2m", 
-                url: "/models/MachineVice/고정 죠.glb", 
-                defaultPos: [-0.1854, 0.0996, -0.0004], 
-                direction: [0, 0.2, 0], 
-                rotation: [3.1347, 1.5686, -3.1402],
-                description: "재질: 회주철 (Grey Cast Iron)\n\n바이스 본체에 고정되어 움직이지 않는 죠(Fixed Jaw)입니다. 진동 흡수성이 좋은 주철로 만들어져 가공 정밀도를 높여줍니다."
-            },
-            { 
-                id: "Part3m", 
-                url: "/models/MachineVice/이동 죠.glb", 
-                defaultPos: [-0.0456, 0.1361, -0.0005], 
-                direction: [0, 0.2, 0], 
-                rotation: [0.0000, 1.5678, 0.0000],
-                description: "재질: 회주철 (Grey Cast Iron)\n\n스핀들의 회전에 따라 앞뒤로 움직이며 공작물을 물어주는 이동 죠(Moving Jaw)입니다."
-            },
-            { 
-                id: "Part4m", 
-                url: "/models/MachineVice/스핀들 지지 블록.glb", 
-                defaultPos: [-0.0201, 0.1001, -0.0205], 
-                direction: [0, 0.2, 0], 
-                rotation: [0.0000, 1.5662, 0.0000],
-                description: "재질: 탄소강\n\n스크류 스핀들을 지지하여 회전력을 직선 운동으로 원활하게 변환할 수 있게 돕는 베어링 블록입니다."
-            },
-            { 
-                id: "Part5-1m", 
-                url: "/models/MachineVice/클램핑 죠 인서트.glb", 
-                defaultPos: [-0.0885, 0.1361, -0.0765], 
-                direction: [0, 0.3, 0], 
-                rotation: [0.0000, -1.5670, 0.0000],
-                description: "재질: 경화강 (Hardened Steel)\n\n이동 죠의 표면에 부착되는 교체형 인서트입니다. 공작물을 꽉 물 수 있도록 표면에 널링(Knurling) 처리가 되어 있을 수 있습니다."
-            },
-            { 
-                id: "Part5-2m", 
-                url: "/models/MachineVice/클램핑 죠 인서트.glb", 
-                defaultPos: [-0.1678, 0.1353, 0.0001], 
-                direction: [0, 0.3, 0], 
-                rotation: [-3.1416, 1.5658, -3.1416],
-                description: "재질: 경화강 (Hardened Steel)\n\n고정 죠에 부착되는 인서트입니다. 마모되었을 때 전체 죠를 교체할 필요 없이 이 부분만 교체하면 되어 경제적입니다."
-            },
-            { 
-                id: "Part6-1m", 
-                url: "/models/MachineVice/가이드 레일.glb", 
-                defaultPos: [-0.0455, 0.1202, -0.0004], 
-                direction: [0, 0.17, 0], 
-                rotation: [1.5610, -0.0001, -3.1347],
-                description: "재질: 고탄소강 (High Carbon Steel)\n\n바이스의 이동 부품들이 정해진 경로를 벗어나지 않도록 잡아주는 정밀 가이드 레일입니다. 내마모성을 위해 열처리됩니다."
-            },
-            { 
-                id: "Part6-2m", 
-                url: "/models/MachineVice/가이드 레일.glb", 
-                defaultPos: [-0.0953, 0.1202, -0.0757], 
-                direction: [0, 0.17, 0], 
-                rotation: [1.5806, 0.0001, 0.0048],
-                description: "재질: 고탄소강 (High Carbon Steel)\n\n반대쪽 가이드 레일입니다. 마찰을 줄이고 부드러운 움직임을 위해 윤활유가 도포되는 부분입니다."
-            },
-            { 
-                id: "Part7m", 
-                url: "/models/MachineVice/트라페조이드 리드 스크류.glb", 
-                defaultPos: [0.0756, 0.1442, -0.0381], 
-                direction: [0.3, 0, 0], 
-                rotation: [-3.1416, 1.5688, -3.1416],
-                description: "재질: 합금강 (Alloy Steel)\n\n핸들을 돌리는 회전력을 강력한 직선 조임력으로 변환해주는 사다리꼴 나사(Lead Screw)입니다. 바이스의 핵심 동력 전달 부품입니다."
-            },
-            { 
-                id: "Part8m", 
-                url: "/models/MachineVice/베이스 플레이트.glb", 
-                defaultPos: [0, 0.1, 0], 
-                direction: [0, 0, 0], 
-                rotation: [1.5758, -0.0000, -3.1402],
-                description: "재질: 회주철 (Grey Cast Iron)\n\n바이스의 바닥판입니다. 공작 기계의 테이블에 바이스를 고정하는 역할을 하며, 진동을 흡수하는 무거운 재질로 만들어집니다."
-            },
-            { 
-                id: "Part9m", 
-                url: "/models/MachineVice/압력 슬리브.glb", 
-                defaultPos: [-0.0443, 0.1442, -0.0378], 
-                direction: [0.03, 0.2, 0], 
-                rotation: [3.1416, -1.5640, 3.1416],
-                description: "재질: 인청동 또는 강철\n\n스크류의 미는 힘을 이동 죠에 균일하게 전달하는 압력 슬리브입니다. 마찰을 줄이는 베어링 역할을 하기도 합니다."
-            },
-        ]
-    },
-    "4": {
-        name: "RobotArm",
-        parts: [
-            { 
-                id: "Baser", 
-                url: "/models/RobotArm/로봇 베이스.glb", 
-                defaultPos: [0, 0, 0], 
-                direction: [0, 0, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 주철 또는 강철\n\n로봇 팔 전체를 바닥이나 작업대에 고정하는 베이스입니다. 로봇의 무게와 동작 시 발생하는 반동을 견고하게 지지합니다."
-            },
-            { 
-                id: "Part2r", 
-                url: "/models/RobotArm/베이스 회전 조인트.glb", 
-                defaultPos: [0.0000, 0.0821, -0.0000], 
-                direction: [0, 0.3, 0], 
-                rotation: [0.0000, 1.5550, 0.0000],
-                description: "재질: 알루미늄 합금\n\n로봇 팔의 1축(Axis 1)에 해당하며, 몸통 전체를 좌우로 회전시키는 관절 모듈입니다."
-            },
-            { 
-                id: "Part3r", 
-                url: "/models/RobotArm/하부 암.glb", 
-                defaultPos: [0.1498, 0.2422, 0.0222], 
-                direction: [0, 0.3, 0.2], 
-                rotation: [1.5615, -0.6519, -0.0056],
-                description: "재질: 알루미늄 합금\n\n로봇의 어깨 관절(Axis 2)과 연결된 하부 암(Lower Arm)입니다. 앞뒤로 움직이며 로봇의 작업 반경을 크게 결정하는 주요 링크입니다."
-            },
-            { 
-                id: "Part4r", 
-                url: "/models/RobotArm/엘보 조인트.glb", 
-                defaultPos: [-0.1810, 0.4973, -0.0253], 
-                direction: [0, 0.3, 0], 
-                rotation: [-1.9292, 1.5260, 1.9288],
-                description: "재질: 알루미늄 합금\n\n하부 암과 상부 암을 연결하는 팔꿈치(Axis 3) 관절입니다. 상하 움직임을 제어하여 높이와 거리를 조절합니다."
-            },
-            { 
-                id: "Part5r", 
-                url: "/models/RobotArm/상부 암.glb", 
-                defaultPos: [0.1150, 0.5099, -0.0298], 
-                direction: [0.2, 0.3, 0], 
-                rotation: [-1.6017, 1.5257, 1.6016],
-                description: "재질: 알루미늄 합금 또는 탄소섬유\n\n로봇의 상부 암(Upper Arm)입니다. 팔뚝 회전(Axis 4) 기능을 포함하여 복잡한 각도의 작업이 가능하게 합니다."
-            },
-            { 
-                id: "Part6r", 
-                url: "/models/RobotArm/손목 회전 조인트.glb", 
-                defaultPos: [0.2629, 0.4971, -0.0299], 
-                direction: [0.3, 0, 0], 
-                rotation: [-1.5645, 0.4378, 1.5615],
-                description: "재질: 알루미늄 합금\n\n손목을 위아래 또는 좌우로 꺾어주는 손목 관절(Axis 5)입니다. 말단 장치(End Effector)의 각도를 정밀하게 제어합니다."
-            },
-            { 
-                id: "Part7r", 
-                url: "/models/RobotArm/손목 암.glb", 
-                defaultPos: [0.3098, 0.4755, -0.0293], 
-                direction: [0.4, -0.05, 0], 
-                rotation: [1.5474, 1.1308, -1.5497],
-                description: "재질: 알루미늄 합금\n\n그리퍼가 부착되는 최종 손목 회전축(Axis 6)입니다. 360도 회전이 가능하여 물체의 방향을 자유롭게 조작할 수 있습니다."
-            },
-            { 
-                id: "Part8-1r", 
-                url: "/models/RobotArm/그리퍼.glb", 
-                defaultPos: [0.3946, 0.4257, 0.0010], 
-                direction: [0.5, -0.09, 0.1], 
-                rotation: [-1.5636, 0.4342, 1.2922],
-                description: "재질: 스테인리스 스틸 또는 알루미늄\n\n물건을 집거나 작업을 수행하는 말단 장치(End Effector)의 한쪽 날입니다. 용도에 따라 다양한 형태로 교체될 수 있습니다."
-            },
-            { 
-                id: "Part8-2r", 
-                url: "/models/RobotArm/그리퍼.glb", 
-                defaultPos: [0.4023, 0.4414, -0.0569], 
-                direction: [0.5, -0.09, -0.1], 
-                rotation: [1.5767, -0.4456, 1.3316],
-                description: "재질: 스테인리스 스틸 또는 알루미늄\n\n그리퍼의 반대쪽 날입니다. 공압이나 전동 모터에 의해 오므려지며 물체를 정밀하게 파지합니다."
-            },
-        ]
-    },
-    "5": {
-        name: "RobotGripper",
-        parts: [
-            { 
-                id: "base_gear", 
-                url: "/models/RobotGripper/구동 기어.glb", 
-                defaultPos: [0.0076, 0.0178, -0.0027], 
-                direction: [0, 0, 0.05], 
-                rotation: [0.0000, -1.5706, 0.0000],
-                description: "재질: 황동 또는 강철\n\n모터의 회전을 받아 그리퍼를 작동시키는 메인 구동 기어입니다. 내구성을 위해 금속 소재가 주로 사용됩니다."
-            },
-            { 
-                id: "mounting_bracket", 
-                url: "/models/RobotGripper/베이스 장착 브라켓.glb", 
-                defaultPos: [0.0101, -0.0053, 0.0060], 
-                direction: [0, 0, 0.1], 
-                rotation: [-0.1133, 1.5241, 1.6775],
-                description: "재질: 알루미늄 합금\n\n그리퍼 모듈 전체를 로봇 팔의 손목 부위에 연결하는 마운팅 브라켓입니다. 경량화를 위해 알루미늄이 선호됩니다."
-            },
-            { 
-                id: "base_plate", 
-                url: "/models/RobotGripper/베이스 플레이트.glb", 
-                defaultPos: [0, 0, 0], 
-                direction: [0, 0, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 알루미늄 합금\n\n기어, 링크, 죠 등 모든 그리퍼 부품이 조립되는 바닥판입니다. 전체 구조의 강성을 담당합니다."
-            },
-            { 
-                id: "gear_link_1", 
-                url: "/models/RobotGripper/기어 연동 링크 1.glb", 
-                defaultPos: [0.0136, 0.0378, 0.0048], 
-                direction: [0.05, 0.05, 0], 
-                rotation: [1.5754, -0.0569, -1.5434],
-                description: "재질: 스테인리스 스틸\n\n회전 운동을 집게의 직선 또는 오므리는 운동으로 변환해주는 1차 링크입니다."
-            },
-            { 
-                id: "gear_link_2", 
-                url: "/models/RobotGripper/기어 연동 링크 2.glb", 
-                defaultPos: [-0.0136, 0.0378, 0.0062], 
-                direction: [-0.05, 0.05, 0], 
-                rotation: [-3.1374, -0.0061, -1.7756],
-                description: "재질: 스테인리스 스틸\n\n반대쪽 집게를 작동시키는 대칭형 링크입니다. 양쪽 집게가 동시에 움직이도록 동기화합니다."
-            },
-            { 
-                id: "link_L", 
-                url: "/models/RobotGripper/링크 암.glb", 
-                defaultPos: [-0.0064, 0.0740, 0.0048], 
-                direction: [-0.05, 0.1, 0], 
-                rotation: [-1.5713, -0.0883, -1.5496],
-                description: "재질: 알루미늄 합금\n\n기어 링크와 그리퍼 죠를 연결하는 중간 링크 암입니다. 지렛대 원리를 이용해 파지력을 증대시킵니다."
-            },
-            { 
-                id: "link_R", 
-                url: "/models/RobotGripper/링크 암.glb", 
-                defaultPos: [0.0060, 0.0739, 0.0049], 
-                direction: [0.05, 0.1, 0], 
-                rotation: [-1.5634, 0.0671, -1.5615],
-                description: "재질: 알루미늄 합금\n\n우측 링크 암입니다. 정밀한 공차로 제작되어야 그리퍼 끝단의 유격이 줄어듭니다."
-            },
-            { 
-                id: "gripper_L", 
-                url: "/models/RobotGripper/그리퍼 죠.glb", 
-                defaultPos: [-0.0031, 0.0870, 0.0000], 
-                direction: [-0.05, 0.05, -0.05], 
-                rotation: [-0.0002, 0.0284, 1.1878],
-                description: "재질: 알루미늄 (고무 패드 부착 가능)\n\n실제로 물체와 접촉하는 좌측 죠(Jaw)입니다. 표면 마찰력을 높이기 위해 고무 패드가 부착되기도 합니다."
-            },
-            { 
-                id: "gripper_R", 
-                url: "/models/RobotGripper/그리퍼 죠.glb", 
-                defaultPos: [0.0027, 0.0870, 0.0012], 
-                direction: [0.05, 0.05, -0.05], 
-                rotation: [-3.1414, -0.0374, -1.9538],
-                description: "재질: 알루미늄 (고무 패드 부착 가능)\n\n우측 죠입니다. 평행 개폐형(Parallel) 또는 부채꼴 개폐형(Angular)으로 동작합니다."
-            },
-            { 
-                id: "Pin_01", 
-                url: "/models/RobotGripper/힌지 핀.glb", 
-                defaultPos: [0.0052, 0.0585, 0.0024], 
-                direction: [0, 0, 0.2], 
-                rotation: [3.1416, -1.5402, 3.1416],
-                description: "재질: 경화강 (Hardened Steel)\n\n각 링크들의 관절 역할을 하는 힌지 핀입니다. 마모를 줄이기 위해 표면 경화 처리되었습니다."
-            },
-            { 
-                id: "Pin_02", 
-                url: "/models/RobotGripper/힌지 핀.glb", 
-                defaultPos: [-0.0075, 0.0895, 0.0024], 
-                direction: [0, 0, 0.2], 
-                rotation: [3.1416, -1.5402, 3.1416],
-                description: "재질: 경화강 (Hardened Steel)\n\n링크 연결부 핀입니다. 스냅 링(E-ring) 등으로 빠지지 않게 고정됩니다."
-            },
-            { 
-                id: "Pin_03", 
-                url: "/models/RobotGripper/힌지 핀.glb", 
-                defaultPos: [0.0154, 0.0689, 0.0020], 
-                direction: [0, 0, 0.2], 
-                rotation: [3.1416, -1.5402, 3.1416],
-                description: "재질: 경화강 (Hardened Steel)\n\n주요 관절 핀입니다. 반복적인 움직임에도 마모되지 않도록 높은 경도를 가집니다."
-            },
-            { 
-                id: "Pin_04", 
-                url: "/models/RobotGripper/힌지 핀.glb", 
-                defaultPos: [-0.0154, 0.0689, 0.0020], 
-                direction: [0, 0, 0.2], 
-                rotation: [3.1416, -1.5402, 3.1416],
-                description: "재질: 경화강 (Hardened Steel)\n\n대칭되는 위치의 힌지 핀입니다."
-            },
-            { 
-                id: "Pin_05", 
-                url: "/models/RobotGripper/힌지 핀.glb", 
-                defaultPos: [0.0073, 0.0894, 0.0024], 
-                direction: [0, 0, 0.2], 
-                rotation: [3.1416, -1.5402, 3.1416],
-                description: "재질: 경화강 (Hardened Steel)\n\n그리퍼 죠의 움직임을 지지하는 핀입니다."
-            },
-            { 
-                id: "Pin_06", 
-                url: "/models/RobotGripper/힌지 핀.glb", 
-                defaultPos: [-0.0136, 0.0377, 0.0025], 
-                direction: [0, 0, 0.2], 
-                rotation: [3.1416, -1.5402, 3.1416],
-                description: "재질: 경화강 (Hardened Steel)\n\n구동 기어와 링크를 연결하는 핀입니다."
-            },
-            { 
-                id: "Pin_07", 
-                url: "/models/RobotGripper/힌지 핀.glb", 
-                defaultPos: [0.0141, 0.0377, 0.0025], 
-                direction: [0, 0, 0.2], 
-                rotation: [3.1416, -1.5402, 3.1416],
-                description: "재질: 경화강 (Hardened Steel)\n\n반대쪽 구동 연결 핀입니다."
-            },
-            { 
-                id: "Pin_08", 
-                url: "/models/RobotGripper/힌지 핀.glb", 
-                defaultPos: [-0.0048, 0.0584, 0.0024], 
-                direction: [0, 0, 0.2], 
-                rotation: [3.1416, -1.5402, 3.1416],
-                description: "재질: 경화강 (Hardened Steel)\n\n중간 링크 연결 핀입니다."
-            },
-            { 
-                id: "Pin_09", 
-                url: "/models/RobotGripper/힌지 핀.glb", 
-                defaultPos: [0.0053, 0.0034, 0.0022], 
-                direction: [0, 0, 0.2], 
-                rotation: [3.1416, -1.5402, 3.1416],
-                description: "재질: 경화강 (Hardened Steel)\n\n베이스 플레이트 고정용 핀일 수 있습니다."
-            },
-            { 
-                id: "Pin_10", 
-                url: "/models/RobotGripper/힌지 핀.glb", 
-                defaultPos: [-0.0053, 0.0034, 0.0022], 
-                direction: [0, 0, 0.2], 
-                rotation: [3.1416, -1.5402, 3.1416],
-                description: "재질: 경화강 (Hardened Steel)\n\n마지막 연결 핀입니다. 모든 핀은 정밀한 동작을 위해 유격 없이 조립되어야 합니다."
-            },
-        ]
-    },
-    "6": {
-        name: "Suspension",
-        parts: [
-            { 
-                id: "Bases", 
-                url: "/models/Suspension/하부 마운트.glb", 
-                defaultPos: [0, 0.028, 0], 
-                direction: [0, 0, 0], 
-                rotation: [0.6156, 0.0000, 0.0000],
-                description: "재질: 강철 또는 알루미늄 합금\n\n서스펜션의 하단부를 바퀴 축이나 컨트롤 암에 고정하는 베이스 마운트입니다."
-            },
-            { 
-                id: "Nut", 
-                url: "/models/Suspension/조절 너트.glb", 
-                defaultPos: [0.0000, 0.1118, 0.0589], 
-                direction: [0, 0.28, 0.2], 
-                rotation: [0.6171, 0.0000, 0.0000],
-                description: "재질: 강철 (아연 도금)\n\n스프링의 압축 강도(Preload)를 조절하는 너트입니다. 차량의 높이나 승차감을 튜닝할 때 사용합니다."
-            },
-            { 
-                id: "Rod", 
-                url: "/models/Suspension/피스톤 로드.glb", 
-                defaultPos: [-0.0001, 0.1198, 0.0646], 
-                direction: [0, 0.14, 0.1], 
-                rotation: [0.6156, 0.0000, 0.0000],
-                description: "재질: 크롬 도금 강철\n\n쇽업쇼버 내부의 오일이나 가스를 통과하며 진동을 억제하는 피스톤 로드입니다. 내마모성을 위해 표면이 매우 매끄럽게 처리되었습니다."
-            },
-            { 
-                id: "Spring", 
-                url: "/models/Suspension/코일 스프링.glb", 
-                defaultPos: [-0.0001, 0.0306, 0.0015], 
-                direction: [0, 0.07, 0.05], 
-                rotation: [0.6156, 0.0000, 0.0000],
-                description: "재질: 스프링강 (SiCr Steel)\n\n노면의 충격을 1차적으로 흡수하여 차체를 지지하는 코일 스프링입니다. 탄성 계수에 따라 서스펜션의 특성이 달라집니다."
-            },
-        ]
-    },
-    "7": {
-        name: "V4_Engine",
-        parts: [
-            { 
-                id: "CRodCap1", 
-                url: "/models/V4_Engine/커넥팅 로드 캡.glb", 
-                defaultPos: [0.1557, 0.1741, 0.0355], 
-                direction: [0, -0.1, 0], 
-                rotation: [2.9430, -1.5665, 3.1415],
-                description: "재질: 단조강 (Forged Steel)\n\n커넥팅 로드의 하단을 크랭크축에 고정하는 캡입니다. 내부에는 마찰을 줄이기 위한 베어링 메탈이 장착됩니다."
-            },
-            { 
-                id: "CRodCap2", 
-                url: "/models/V4_Engine/커넥팅 로드 캡.glb", 
-                defaultPos: [0.2708, 0.2261, -0.0355], 
-                direction: [0, -0.1, 0], 
-                rotation: [-2.9596, -1.5665, 3.1415],
-                description: "재질: 단조강 (Forged Steel)\n\n2번 실린더의 커넥팅 로드 캡입니다. 고속 회전 시 발생하는 엄청난 인장 하중을 견뎌야 합니다."
-            },
-            { 
-                id: "CRodCap3", 
-                url: "/models/V4_Engine/커넥팅 로드 캡.glb", 
-                defaultPos: [0.3838, 0.2261, -0.0355], 
-                direction: [0, -0.1, 0], 
-                rotation: [-2.9596, -1.5665, 3.1415],
-                description: "재질: 단조강 (Forged Steel)\n\n3번 실린더용 캡입니다. 조립 시 짝이 맞는 로드와 정확한 방향으로 체결해야 합니다."
-            },
-            { 
-                id: "CRodCap4", 
-                url: "/models/V4_Engine/커넥팅 로드 캡.glb", 
-                defaultPos: [0.4984, 0.1741, 0.0355], 
-                direction: [0, -0.1, 0], 
-                rotation: [2.9430, -1.5665, 3.1415],
-                description: "재질: 단조강 (Forged Steel)\n\n4번 실린더용 캡입니다. V4 엔진의 특성상 강한 내구성이 요구되는 부품입니다."
-            },
-            { 
-                id: "CRod1", 
-                url: "/models/V4_Engine/커넥팅 로드.glb", 
-                defaultPos: [0.1557, 0.3712, -0.0042], 
-                direction: [0, 0.3, -0.03], 
-                rotation: [2.9430, -1.5665, 3.1415],
-                description: "재질: 단조강 (Forged Steel)\n\n피스톤의 직선 왕복 운동을 크랭크축의 회전 운동으로 변환해주는 커넥팅 로드입니다. 높은 강성과 인성이 필수적입니다."
-            },
-            { 
-                id: "CRod2", 
-                url: "/models/V4_Engine/커넥팅 로드.glb", 
-                defaultPos: [0.2708, 0.4240, 0.0008], 
-                direction: [0, 0.3, 0.03], 
-                rotation: [-2.9596, -1.5665, 3.1415],
-                description: "재질: 단조강 (Forged Steel)\n\n2번 피스톤과 연결되는 로드입니다. 강성을 유지하면서도 관성력을 줄이기 위해 I형 단면으로 제작됩니다."
-            },
-            { 
-                id: "CRod3", 
-                url: "/models/V4_Engine/커넥팅 로드.glb", 
-                defaultPos: [0.3838, 0.4240, 0.0008], 
-                direction: [0, 0.3, 0.03], 
-                rotation: [-2.9596, -1.5665, 3.1415],
-                description: "재질: 단조강 (Forged Steel)\n\n3번 피스톤 로드입니다. 고성능 엔진에서는 티타늄 합금이 사용되기도 합니다."
-            },
-            { 
-                id: "CRod4", 
-                url: "/models/V4_Engine/커넥팅 로드.glb", 
-                defaultPos: [0.4984, 0.3712, -0.0042], 
-                direction: [0, 0.3, -0.03], 
-                rotation: [2.9430, -1.5665, 3.1415],
-                description: "재질: 단조강 (Forged Steel)\n\n4번 피스톤 로드입니다. 엔진의 폭발력을 직접 받아내는 부품 중 하나입니다."
-            },
-            { 
-                id: "Bolt1", 
-                url: "/models/V4_Engine/커넥팅 로드 볼트.glb", 
-                defaultPos: [0.1557, 0.2110, 0.0669], 
-                direction: [0, 0.45, -0.06], 
-                rotation: [2.9430, -1.5665, 3.1415],
-                description: "재질: 고장력강 (High Tensile Steel)\n\n커넥팅 로드와 캡을 결합하는 특수 볼트입니다. 소성 변형 영역까지 조이는 각도법이 주로 사용됩니다."
-            },
-            { 
-                id: "Bolt2", 
-                url: "/models/V4_Engine/커넥팅 로드 볼트.glb", 
-                defaultPos: [0.1557, 0.1959, -0.0076], 
-                direction: [0, 0.45, -0.06], 
-                rotation: [2.9430, -1.5665, 3.1415],
-                description: "재질: 고장력강 (High Tensile Steel)\n\n1번 로드의 반대쪽 볼트입니다."
-            },
-            { 
-                id: "Bolt3", 
-                url: "/models/V4_Engine/커넥팅 로드 볼트.glb", 
-                defaultPos: [0.2708, 0.2487, 0.0070], 
-                direction: [0, 0.45, 0.06], 
-                rotation: [-2.9596, -1.5665, 3.1415],
-                description: "재질: 고장력강 (High Tensile Steel)\n\n2번 로드 볼트입니다."
-            },
-            { 
-                id: "Bolt4", 
-                url: "/models/V4_Engine/커넥팅 로드 볼트.glb", 
-                defaultPos: [0.2708, 0.2624, -0.0676], 
-                direction: [0, 0.45, 0.06], 
-                rotation: [-2.9596, -1.5665, 3.1415],
-                description: "재질: 고장력강 (High Tensile Steel)\n\n2번 로드 반대쪽 볼트입니다."
-            },
-            { 
-                id: "Bolt5", 
-                url: "/models/V4_Engine/커넥팅 로드 볼트.glb", 
-                defaultPos: [0.3838, 0.2487, 0.0070], 
-                direction: [0, 0.45, 0.06], 
-                rotation: [-2.9596, -1.5665, 3.1415],
-                description: "재질: 고장력강 (High Tensile Steel)\n\n3번 로드 볼트입니다."
-            },
-            { 
-                id: "Bolt6", 
-                url: "/models/V4_Engine/커넥팅 로드 볼트.glb", 
-                defaultPos: [0.3838, 0.2624, -0.0676], 
-                direction: [0, 0.45, 0.06], 
-                rotation: [-2.9596, -1.5665, 3.1415],
-                description: "재질: 고장력강 (High Tensile Steel)\n\n3번 로드 반대쪽 볼트입니다."
-            },
-            { 
-                id: "Bolt7", 
-                url: "/models/V4_Engine/커넥팅 로드 볼트.glb", 
-                defaultPos: [0.4984, 0.2110, 0.0669], 
-                direction: [0, 0.45, -0.06], 
-                rotation: [2.9430, -1.5665, 3.1415],
-                description: "재질: 고장력강 (High Tensile Steel)\n\n4번 로드 볼트입니다."
-            },
-            { 
-                id: "Bolt8", 
-                url: "/models/V4_Engine/커넥팅 로드 볼트.glb", 
-                defaultPos: [0.4984, 0.1959, -0.0076], 
-                direction: [0, 0.45, -0.06], 
-                rotation: [2.9430, -1.5665, 3.1415],
-                description: "재질: 고장력강 (High Tensile Steel)\n\n4번 로드 반대쪽 볼트입니다. 엔진 오버홀 시 반드시 신품으로 교체해야 하는 1회성 부품인 경우가 많습니다."
-            },
-            { 
-                id: "CS", 
-                url: "/models/V4_Engine/크랭크샤프트.glb", 
-                defaultPos: [0, 0.2, 0], 
-                direction: [0, 0, 0], 
-                rotation: [-0.9394, 0.0000, 0.0000],
-                description: "재질: 단조강 또는 주철\n\n커넥팅 로드를 통해 전달된 왕복 운동을 회전 운동으로 바꾸는 크랭크샤프트입니다. 엔진 출력을 전달하는 핵심 축입니다."
-            },
-            { 
-                id: "PP1", 
-                url: "/models/V4_Engine/피스톤 핀.glb", 
-                defaultPos: [0.1963, 0.3712, -0.0042], 
-                direction: [-0.5, 0, 0], 
-                rotation: [0.0000, 1.5675, 0.0000],
-                description: "재질: 표면 경화강 (Case Hardened Steel)\n\n피스톤과 커넥팅 로드를 연결하는 중공축 핀입니다. 가볍고 튼튼하며 마찰에 강해야 합니다."
-            },
-            { 
-                id: "PP2", 
-                url: "/models/V4_Engine/피스톤 핀.glb", 
-                defaultPos: [0.3114, 0.4240, 0.0008], 
-                direction: [-0.5, 0, 0], 
-                rotation: [0.0000, 1.5675, 0.0000],
-                description: "재질: 표면 경화강 (Case Hardened Steel)\n\n2번 피스톤 핀입니다."
-            },
-            { 
-                id: "PP3", 
-                url: "/models/V4_Engine/피스톤 핀.glb", 
-                defaultPos: [0.4248, 0.4240, 0.0008], 
-                direction: [0.5, 0, 0], 
-                rotation: [0.0000, 1.5675, 0.0000],
-                description: "재질: 표면 경화강 (Case Hardened Steel)\n\n3번 피스톤 핀입니다."
-            },
-            { 
-                id: "PP4", 
-                url: "/models/V4_Engine/피스톤 핀.glb", 
-                defaultPos: [0.5398, 0.3712, -0.0042], 
-                direction: [0.5, 0, 0], 
-                rotation: [0.0000, 1.5675, 0.0000],
-                description: "재질: 표면 경화강 (Case Hardened Steel)\n\n4번 피스톤 핀입니다."
-            },
-            { 
-                id: "PR1", 
-                url: "/models/V4_Engine/피스톤 링.glb", 
-                defaultPos: [0.1557, 0.4225, -0.0042], 
-                direction: [0, 0.4, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 특수 주철 또는 강철\n\n연소실의 압력이 새어나가지 않도록 막아주고, 실린더 벽의 오일을 긁어내리는 역할을 하는 피스톤 링입니다."
-            },
-            { 
-                id: "PR2", 
-                url: "/models/V4_Engine/피스톤 링.glb", 
-                defaultPos: [0.1557, 0.4109, -0.0042], 
-                direction: [0, 0.4, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 특수 주철 또는 강철\n\n보통 상단에는 압축 링, 하단에는 오일 링이 장착됩니다."
-            },
-            { 
-                id: "PR3", 
-                url: "/models/V4_Engine/피스톤 링.glb", 
-                defaultPos: [0.1557, 0.3993, -0.0042], 
-                direction: [0, 0.4, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 특수 주철 또는 강철\n\n실린더 벽면의 윤활유막 두께를 조절하여 엔진 소착을 방지합니다."
-            },
-            { 
-                id: "PR4", 
-                url: "/models/V4_Engine/피스톤 링.glb", 
-                defaultPos: [0.2708, 0.4753, 0.0008], 
-                direction: [0, 0.4, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 특수 주철 또는 강철\n\n2번 피스톤의 링 세트입니다."
-            },
-            { 
-                id: "PR5", 
-                url: "/models/V4_Engine/피스톤 링.glb", 
-                defaultPos: [0.3838, 0.4753, 0.0008], 
-                direction: [0, 0.4, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 특수 주철 또는 강철\n\n3번 피스톤의 링 세트입니다."
-            },
-            { 
-                id: "PR6", 
-                url: "/models/V4_Engine/피스톤 링.glb", 
-                defaultPos: [0.4984, 0.4225, -0.0042], 
-                direction: [0, 0.4, 0], 
-                rotation: [0, 0, 0],
-                description: "재질: 특수 주철 또는 강철\n\n4번 피스톤의 링 세트입니다."
-            },
-            { 
-                id: "Piston1", 
-                url: "/models/V4_Engine/피스톤.glb", 
-                defaultPos: [0.1557, 0.3441, -0.0042], 
-                direction: [0, 0.4, 0], 
-                rotation: [-3.1416, 1.5644, -3.1416],
-                description: "재질: 알루미늄 합금 (Cast Aluminum)\n\n연소실에서 폭발 압력을 직접 받아 운동 에너지로 변환하는 피스톤입니다. 고온 고압을 견뎌야 합니다."
-            },
-            { 
-                id: "Piston2", 
-                url: "/models/V4_Engine/피스톤.glb", 
-                defaultPos: [0.2708, 0.3969, 0.0008], 
-                direction: [0, 0.4, 0], 
-                rotation: [-3.1416, 1.5644, -3.1416],
-                description: "재질: 알루미늄 합금 (Cast Aluminum)\n\n2번 피스톤입니다. V4 엔진은 실린더가 V자 형태로 배치되어 컴팩트한 크기를 가집니다."
-            },
-            { 
-                id: "Piston3", 
-                url: "/models/V4_Engine/피스톤.glb", 
-                defaultPos: [0.3838, 0.3969, 0.0008], 
-                direction: [0, 0.4, 0], 
-                rotation: [-3.1416, 1.5644, -3.1416],
-                description: "재질: 알루미늄 합금 (Cast Aluminum)\n\n3번 피스톤입니다. 피스톤 상단의 형상은 연소 효율을 결정짓는 중요한 요소입니다."
-            },
-            { 
-                id: "Piston4", 
-                url: "/models/V4_Engine/피스톤.glb", 
-                defaultPos: [0.4984, 0.3441, -0.0042], 
-                direction: [0, 0.4, 0], 
-                rotation: [-3.1416, 1.5644, -3.1416],
-                description: "재질: 알루미늄 합금 (Cast Aluminum)\n\n4번 피스톤입니다."
-            },
-        ]
-    }
-};
+        "1": {
+            name: "Drone",
+            parts: [
+                { id: "Main_Frame", url: "/models/Drone/메인 프레임.glb", defaultPos: [0, 0.1, 0], direction: [0, 0, 0], rotation: [-1.5646, 0, 0], description: "재질: 탄소 섬유 강화 플라스틱 (CFRP)\n\n드론의 뼈대가 되는 메인 프레임입니다. 가볍지만 강철보다 강한 강성을 가지고 있어 비행 중 발생하는 진동과 충격을 효과적으로 견딥니다."},
+                { id: "Main_Frame_Mirror", url: "/models/Drone/메인 프레임 좌우대칭형.glb", defaultPos: [0, 0.1, 0], direction: [0, 0.2, 0], rotation: [-1.5646, 0, 0], description: "재질: 탄소 섬유 강화 플라스틱 (CFRP)\n\n메인 프레임의 하단부로, 상단 프레임과 결합하여 내부의 전자 장비(FC, ESC, 배터리)를 보호하는 샌드위치 구조를 형성합니다."},
+                { id: "Arm_Gear_LF", url: "/models/Drone/접이식 암 기어.glb", defaultPos: [-0.0812, 0.0888, -0.1776], direction: [0, 0.2, 0], rotation: [0, 0, 0], description: "재질: 고강도 엔지니어링 플라스틱 (PA66)\n\n좌측 전방(Front-Left) 모터를 지지하는 암(Arm)입니다. 접이식 구조로 설계되어 운반 시 부피를 줄일 수 있으며 비행 시에는 단단히 고정됩니다."},
+                { id: "Arm_Gear_RF", url: "/models/Drone/접이식 암 기어.glb", defaultPos: [0.0812, 0.0888, -0.1776], direction: [0, 0.2, 0], rotation: [0, 0, 0], description: "재질: 고강도 엔지니어링 플라스틱 (PA66)\n\n우측 전방(Front-Right) 모터를 지지하는 암입니다. 모터의 진동이 메인 프레임으로 전달되는 것을 최소화하는 구조적 특징을 가집니다."},
+                { id: "Arm_Gear_LB", url: "/models/Drone/접이식 암 기어.glb", defaultPos: [-0.0974, 0.0882, 0.0148], direction: [0, 0.2, 0], rotation: [0, 0, 0], description: "재질: 고강도 엔지니어링 플라스틱 (PA66)\n\n좌측 후방(Rear-Left) 암입니다. 드론의 대각선 축 길이를 결정하여 비행 안정성에 직접적인 영향을 미칩니다."},
+                { id: "Arm_Gear_RB", url: "/models/Drone/접이식 암 기어.glb", defaultPos: [0.0974, 0.0882, 0.0148], direction: [0, 0.2, 0], rotation: [0, 0, 0], description: "재질: 고강도 엔지니어링 플라스틱 (PA66)\n\n우측 후방(Rear-Right) 암입니다. 4개의 암이 정확한 대칭을 이루어야 호버링(정지 비행) 시 기체가 한쪽으로 쏠리지 않습니다."},
+                { id: "Gearing_Unit_LF", url: "/models/Drone/기어 세트.glb", defaultPos: [-0.0733, 0.0834, -0.1667], direction: [0, 0.2, 0], rotation: [0, 0, 0], description: "재질: 폴리아세탈 (POM)\n\n모터의 회전력을 프로펠러로 전달하는 기어 유닛입니다. 마찰 계수가 낮은 POM 소재를 사용하여 동력 손실을 최소화합니다."},
+                { id: "Gearing_Unit_RF", url: "/models/Drone/기어 세트.glb", defaultPos: [0.0733, 0.0834, -0.1667], direction: [0, 0.2, 0], rotation: [0, 0, 0], description: "재질: 폴리아세탈 (POM)\n\n우측 전방 기어 세트입니다. 정밀하게 가공된 기어 톱니는 소음을 줄이고 에너지 전달 효율을 극대화합니다."},
+                { id: "Gearing_Unit_LB", url: "/models/Drone/기어 세트.glb", defaultPos: [-0.0850, 0.0824, 0.0093], direction: [0, 0.2, 0], rotation: [0, 0, 0], description: "재질: 폴리아세탈 (POM)\n\n좌측 후방 기어 세트입니다. 비행 중 지속적인 고속 회전 마찰을 견딜 수 있도록 내마모성이 우수한 소재가 사용됩니다."},
+                { id: "Gearing_Unit_RB", url: "/models/Drone/기어 세트.glb", defaultPos: [0.0850, 0.0824, 0.0093], direction: [0, 0.2, 0], rotation: [0, 0, 0], description: "재질: 폴리아세탈 (POM)\n\n우측 후방 기어 세트입니다. 기어의 맞물림(Backlash)이 적절해야 부드러운 비행이 가능합니다."},
+                { id: "Beater_Disc", url: "/models/Drone/로터 플레이트.glb", defaultPos: [0.0000, 0.1009, -0.1637], direction: [0, 0.1, 0], rotation: [-0.0000, -1.5463, 1.5650], description: "재질: 알루미늄 합금 (6061)\n\n프로펠러와 모터 축을 연결하는 로터 허브 플레이트입니다. 고속 회전 시 원심력을 견디며 블레이드를 단단히 고정합니다."},
+                { id: "Impellar_Blade_LF", url: "/models/Drone/프로펠러 블레이드.glb", defaultPos: [-0.0809, 0.1091, -0.1778], direction: [0, 0.3, 0], rotation: [0, 0, 0], description: "재질: 폴리카보네이트 (Polycarbonate)\n\n공기 역학적으로 설계된 프로펠러 블레이드입니다. 시계 방향(CW) 또는 반시계 방향(CCW)으로 회전하며 양력을 발생시킵니다."},
+                { id: "Impellar_Blade_RF", url: "/models/Drone/프로펠러 블레이드.glb", defaultPos: [0.0809, 0.1091, -0.1778], direction: [0, 0.3, 0], rotation: [0, 0, 0], description: "재질: 폴리카보네이트 (Polycarbonate)\n\n우측 전방 프로펠러입니다. 드론은 대각선에 위치한 프로펠러끼리 같은 방향으로 회전하여 토크(Torque)를 상쇄시킵니다."},
+                { id: "Impellar_Blade_LB", url: "/models/Drone/프로펠러 블레이드.glb", defaultPos: [-0.0975, 0.1085, 0.0147], direction: [0, 0.3, 0], rotation: [0, 0, 0], description: "재질: 폴리카보네이트 (Polycarbonate)\n\n좌측 후방 프로펠러입니다. 끝부분의 윙렛(Winglet) 설계는 와류(Vortex)를 줄여 비행 소음을 감소시키고 효율을 높입니다."},
+                { id: "Impellar_Blade_RB", url: "/models/Drone/프로펠러 블레이드.glb", defaultPos: [0.0975, 0.1085, 0.0147], direction: [0, 0.3, 0], rotation: [0, 0, 0], description: "재질: 폴리카보네이트 (Polycarbonate)\n\n우측 후방 프로펠러입니다. 충격에 강한 폴리카보네이트 소재를 사용하여 파손 위험을 줄였습니다."},
+                { id: "Support_Leg_LF", url: "/models/Drone/랜딩 레그.glb", defaultPos: [-0.0812, 0.1000, -0.1776], direction: [0, 0.1, 0], rotation: [0.0000, 0.6391, 0.0000], description: "재질: 열가소성 폴리우레탄 (TPU)\n\n착륙 시 지면과의 충격을 완화하고 기체 하단부의 카메라나 센서를 보호하는 연질 랜딩 기어입니다."},
+                { id: "Support_Leg_RF", url: "/models/Drone/랜딩 레그.glb", defaultPos: [0.0812, 0.1000, -0.1776], direction: [0, 0.1, 0], rotation: [0.0000, -0.6391, 0.0000], description: "재질: 열가소성 폴리우레탄 (TPU)\n\n우측 전방 랜딩 레그입니다. 마찰력이 높은 소재를 사용하여 경사지나 미끄러운 표면에서도 안정적인 이착륙을 돕습니다."},
+                { id: "Support_Leg_LB", url: "/models/Drone/랜딩 레그.glb", defaultPos: [-0.0973, 0.0990, 0.0146], direction: [0, 0.1, 0], rotation: [-3.1416, 1.1787, -3.1416], description: "재질: 열가소성 폴리우레탄 (TPU)\n\n좌측 후방 랜딩 레그입니다. 탄성이 있어 반복적인 착륙 충격에도 파손되지 않도록 설계되었습니다."},
+                { id: "Support_Leg_RB", url: "/models/Drone/랜딩 레그.glb", defaultPos: [0.0973, 0.0990, 0.0146], direction: [0, 0.1, 0], rotation: [-3.1416, -1.1787, -3.1416], description: "재질: 열가소성 폴리우레탄 (TPU)\n\n우측 후방 랜딩 레그입니다. 기체의 무게 중심을 고려하여 배치되었으며 안정적인 지지를 제공합니다."},
+                { id: "Fixing_Screw_LF", url: "/models/Drone/체결 나사.glb", defaultPos: [-0.0515, 0.0948, -0.1369], direction: [0, -0.1, 0], rotation: [0.0000, 0.0000, -3.15], description: "재질: 스테인리스 스틸 (SUS304)\n\n부품들을 결합하는 고장력 나사입니다. 비행 진동에 의해 풀리지 않도록 나사산에 풀림 방지 처리가 되어 있습니다."},
+                { id: "Fixing_Screw_RF", url: "/models/Drone/체결 나사.glb", defaultPos: [0.0515, 0.0948, -0.1369], direction: [0, -0.1, 0], rotation: [0.0000, 0.0000, -3.15], description: "재질: 스테인리스 스틸 (SUS304)\n\n우측 전방 부품 고정 나사입니다. 부식에 강한 스테인리스 소재를 사용하여 야외 비행 환경에 적합합니다."},
+                { id: "Fixing_Screw_LB", url: "/models/Drone/체결 나사.glb", defaultPos: [0.0513, 0.0939, -0.0051], direction: [0, -0.1, 0], rotation: [0.0000, 0.0000, -3.15], description: "재질: 스테인리스 스틸 (SUS304)\n\n후방 부품 결합용 나사입니다. 정밀한 체결력을 유지하기 위해 규격에 맞는 도구를 사용해야 합니다."},
+                { id: "Fixing_Screw_RB", url: "/models/Drone/체결 나사.glb", defaultPos: [-0.0513, 0.0939, -0.0051], direction: [0, -0.1, 0], rotation: [0.0000, 0.0000, -3.15], description: "재질: 스테인리스 스틸 (SUS304)\n\n우측 후방 고정 나사입니다. 작은 부품이지만 기체의 전체적인 결합 강성을 유지하는 중요한 역할을 합니다."},
+                { id: "Fixing_Nut_LF", url: "/models/Drone/프로펠러 고정 너트.glb", defaultPos: [-0.0514, 0.1061, -0.1372], direction: [0, 0.4, 0], rotation: [0, 0, 0], description: "재질: 알루미늄 합금 (아노다이징 처리)\n\n프로펠러가 고속 회전 중에도 이탈하지 않도록 고정하는 너트입니다. 회전 방향과 반대로 조여지는 역나사 방식이 적용될 수 있습니다."},
+                { id: "Fixing_Nut_RF", url: "/models/Drone/프로펠러 고정 너트.glb", defaultPos: [0.0514, 0.1061, -0.1372], direction: [0, 0.4, 0], rotation: [0, 0, 0], description: "재질: 알루미늄 합금 (아노다이징 처리)\n\n우측 전방 프로펠러 고정 너트입니다. 비행 전 항상 조임 상태를 점검해야 하는 안전 필수 부품입니다."},
+                { id: "Fixing_Nut_LB", url: "/models/Drone/프로펠러 고정 너트.glb", defaultPos: [-0.0514, 0.1061, -0.0048], direction: [0, 0.4, 0], rotation: [0, 0, 0], description: "재질: 알루미늄 합금 (아노다이징 처리)\n\n좌측 후방 너트입니다. 모터의 회전 방향(CW/CCW)을 구분하기 위해 색상을 다르게 적용하기도 합니다."},
+                { id: "Fixing_Nut_RB", url: "/models/Drone/프로펠러 고정 너트.glb", defaultPos: [0.0514, 0.1061, -0.0048], direction: [0, 0.4, 0], rotation: [0, 0, 0], description: "재질: 알루미늄 합금 (아노다이징 처리)\n\n우측 후방 너트입니다. 경량화를 위해 알루미늄 소재를 사용하며 내식성을 위해 아노다이징 처리되었습니다."},
+                { id: "xyz", url: "/models/Drone/모터 하우징.glb", defaultPos: [0.0001, 0.0833, -0.0786], direction: [0, 0.1, 0], rotation: [0, 0, 0], description: "재질: 내열 ABS 플라스틱\n\n모터를 보호하고 내부의 열을 방출하는 하우징 커버입니다. 먼지나 이물질 유입을 막아 모터 수명을 연장시킵니다."},
+            ]
+        },
+        "2": {
+            name: "LeafSpring",
+            parts: [
+                { id: "Chassis", url: "/models/LeafSpring/섀시 서포트 브라켓.glb", defaultPos: [-0.0064, 0.2511, -0.6397], direction: [0, 0.6, 0], rotation: [3.1402, 0.0000, 0.0000], description: "재질: 구조용 강철 (Structural Steel)\n\n차량의 프레임에 연결되는 섀시 서포트입니다. 판스프링 시스템 전체를 차체에 고정하며 하중을 전달받는 주요 구조물입니다."},
+                { id: "Chassis_Rigid", url: "/models/LeafSpring/섀시 고정 서포트.glb", defaultPos: [-0.0081, 0.1658, 0.4534], direction: [0, 0.6, 0], rotation: [-3.1381, 0.0000, 0.0000], description: "재질: 구조용 강철 (Structural Steel)\n\n판스프링의 반대쪽 끝을 차체에 고정하는 서포트입니다. 주행 중 발생하는 비틀림 강성을 견딜 수 있도록 설계되었습니다."},
+                { id: "Leaf_Layer", url: "/models/LeafSpring/판스프링 리프.glb", defaultPos: [0, 0.13, 0], direction: [0, 0.4, 0], rotation: [0, 0, 0], description: "재질: 스프링강 (Spring Steel, SUP9)\n\n탄성이 뛰어난 금속 판들을 겹쳐 만든 리프(Leaf) 묶음입니다. 충격을 흡수하고 차량의 무게를 지탱하는 핵심 서스펜션 부품입니다."},
+                { id: "Clamp_Center", url: "/models/LeafSpring/센터 클램프.glb", defaultPos: [0.0798, 0.0535, -0.0008], direction: [0, 0, 0], rotation: [0, 0, 0], description: "재질: 탄소강 (Carbon Steel)\n\n여러 겹의 스프링 판들이 흩어지지 않도록 중앙에서 강력하게 잡아주는 센터 클램프입니다. 차축(Axle)과 연결되는 부위이기도 합니다."},
+                { id: "Clamp_Primary_L", url: "/models/LeafSpring/메인 클램프.glb", defaultPos: [0.0837, 0.0632, 0.1287], direction: [0, 0.8, 1.2], rotation: [-0.0650, 0.0000, 0.0000], description: "재질: 탄소강 (Carbon Steel)\n\n스프링의 좌측 부분을 고정하는 메인 U-볼트 클램프입니다. 수직 하중뿐만 아니라 주행 시 발생하는 전단력을 지지합니다."},
+                { id: "Clamp_Primary_R", url: "/models/LeafSpring/메인 클램프.glb", defaultPos: [0.0837, 0.0632, -0.1287], direction: [0, 0.8, -1.4], rotation: [0.0650, 0.0000, 0.0000], description: "재질: 탄소강 (Carbon Steel)\n\n스프링의 우측 부분을 고정하는 메인 U-볼트 클램프입니다. 판스프링이 차축에서 이탈하지 않도록 견고하게 잡아줍니다."},
+                { id: "Clamp_Secondary_L", url: "/models/LeafSpring/보조 클램프.glb", defaultPos: [0.0835, 0.0928, 0.2816], direction: [0, 0.8, 1.2], rotation: [-0.1597, 0.0000, 0.0000], description: "재질: 연강 (Mild Steel)\n\n스프링 판들이 상하 운동을 할 때 옆으로 틀어지는 것을 방지하는 보조 클램프(리바운드 클립)입니다."},
+                { id: "Clamp_Secondary_R", url: "/models/LeafSpring/보조 클램프.glb", defaultPos: [0.0837, 0.0961, -0.2731], direction: [0, 0.8, -1.4], rotation: [0.1597, 0.0000, 0.0000], description: "재질: 연강 (Mild Steel)\n\n우측 보조 클램프입니다. 급격한 코너링이나 험로 주행 시 스프링 잎들의 정렬 상태를 유지시켜 줍니다."},
+                { id: "SupportL", url: "/models/LeafSpring/서포트 브라켓.glb", defaultPos: [0.0775, 0.2105, -0.5994], direction: [0.1, 0, 0], rotation: [1.9142, -1.5582, 3.1416], description: "재질: 주강 (Cast Steel)\n\n판스프링의 끝단과 차체를 연결하는 브라켓입니다. 스프링이 눌릴 때 길이가 변할 수 있도록 유동적인 움직임을 허용하는 구조입니다."},
+                { id: "SupportR", url: "/models/LeafSpring/서포트 브라켓.glb", defaultPos: [-0.0006, 0.2562, -0.5829], direction: [-0.1, 0, 0], rotation: [1.9142, 1.5582, 3.1416], description: "재질: 주강 (Cast Steel)\n\n반대쪽 고정 브라켓입니다. 스프링의 상하 운동을 지지하며 차체로 전달되는 충격을 1차적으로 받아냅니다."},
+                { id: "Rubber", url: "/models/LeafSpring/고무 부싱.glb", defaultPos: [0.0074, 0.2494, -0.6404], direction: [0, 0, -0.1], rotation: [0, 0, 0], description: "재질: 강화 고무 또는 우레탄\n\n금속 부품 간의 마찰과 소음을 줄이고 미세한 진동을 흡수하는 고무 부싱(Bushing)입니다. 승차감을 개선하는 중요한 부품입니다."},
+            ]
+        },
+        "3": {
+            name: "MachineVice",
+            parts: [
+                { id: "Fuhrung", url: "/models/MachineVice/슬라이드 가이드 블록.glb", defaultPos: [-0.1601, 0.1301, -0.0107], direction: [0, 0.1, 0], rotation: [-1.5724, 0.0000, 0.0000], description: "재질: 합금강 (Alloy Steel)\n\n이동 죠(Moving Jaw)가 흔들림 없이 직선으로 움직이도록 안내하는 가이드 블록입니다. 정밀 가공 시 오차를 줄여줍니다."},
+                { id: "Part2m", url: "/models/MachineVice/고정 죠.glb", defaultPos: [-0.1854, 0.0996, -0.0004], direction: [0, 0.2, 0], rotation: [3.1347, 1.5686, -3.1402], description: "재질: 회주철 (Grey Cast Iron)\n\n바이스 본체에 고정되어 움직이지 않는 죠(Fixed Jaw)입니다. 진동 흡수성이 좋은 주철로 만들어져 가공 정밀도를 높여줍니다."},
+                { id: "Part3m", url: "/models/MachineVice/이동 죠.glb", defaultPos: [-0.0456, 0.1361, -0.0005], direction: [0, 0.2, 0], rotation: [0.0000, 1.5678, 0.0000], description: "재질: 회주철 (Grey Cast Iron)\n\n스핀들의 회전에 따라 앞뒤로 움직이며 공작물을 물어주는 이동 죠(Moving Jaw)입니다."},
+                { id: "Part4m", url: "/models/MachineVice/스핀들 지지 블록.glb", defaultPos: [-0.0201, 0.1001, -0.0205], direction: [0, 0.2, 0], rotation: [0.0000, 1.5662, 0.0000], description: "재질: 탄소강\n\n스크류 스핀들을 지지하여 회전력을 직선 운동으로 원활하게 변환할 수 있게 돕는 베어링 블록입니다."},
+                { id: "Part5-1m", url: "/models/MachineVice/클램핑 죠 인서트.glb", defaultPos: [-0.0885, 0.1361, -0.0765], direction: [0, 0.3, 0], rotation: [0.0000, -1.5670, 0.0000], description: "재질: 경화강 (Hardened Steel)\n\n이동 죠의 표면에 부착되는 교체형 인서트입니다. 공작물을 꽉 물 수 있도록 표면에 널링(Knurling) 처리가 되어 있을 수 있습니다."},
+                { id: "Part5-2m", url: "/models/MachineVice/클램핑 죠 인서트.glb", defaultPos: [-0.1678, 0.1353, 0.0001], direction: [0, 0.3, 0], rotation: [-3.1416, 1.5658, -3.1416], description: "재질: 경화강 (Hardened Steel)\n\n고정 죠에 부착되는 인서트입니다. 마모되었을 때 전체 죠를 교체할 필요 없이 이 부분만 교체하면 되어 경제적입니다."},
+                { id: "Part6-1m", url: "/models/MachineVice/가이드 레일.glb", defaultPos: [-0.0455, 0.1202, -0.0004], direction: [0, 0.17, 0], rotation: [1.5610, -0.0001, -3.1347], description: "재질: 고탄소강 (High Carbon Steel)\n\n바이스의 이동 부품들이 정해진 경로를 벗어나지 않도록 잡아주는 정밀 가이드 레일입니다. 내마모성을 위해 열처리됩니다."},
+                { id: "Part6-2m", url: "/models/MachineVice/가이드 레일.glb", defaultPos: [-0.0953, 0.1202, -0.0757], direction: [0, 0.17, 0], rotation: [1.5806, 0.0001, 0.0048], description: "재질: 고탄소강 (High Carbon Steel)\n\n반대쪽 가이드 레일입니다. 마찰을 줄이고 부드러운 움직임을 위해 윤활유가 도포되는 부분입니다."},
+                { id: "Part7m", url: "/models/MachineVice/트라페조이드 리드 스크류.glb", defaultPos: [0.0756, 0.1442, -0.0381], direction: [0.3, 0, 0], rotation: [-3.1416, 1.5688, -3.1416], description: "재질: 합금강 (Alloy Steel)\n\n핸들을 돌리는 회전력을 강력한 직선 조임력으로 변환해주는 사다리꼴 나사(Lead Screw)입니다. 바이스의 핵심 동력 전달 부품입니다."},
+                { id: "Part8m", url: "/models/MachineVice/베이스 플레이트.glb", defaultPos: [0, 0.1, 0], direction: [0, 0, 0], rotation: [1.5758, -0.0000, -3.1402], description: "재질: 회주철 (Grey Cast Iron)\n\n바이스의 바닥판입니다. 공작 기계의 테이블에 바이스를 고정하는 역할을 하며, 진동을 흡수하는 무거운 재질로 만들어집니다."},
+                { id: "Part9m", url: "/models/MachineVice/압력 슬리브.glb", defaultPos: [-0.0443, 0.1442, -0.0378], direction: [0.03, 0.2, 0], rotation: [3.1416, -1.5640, 3.1416], description: "재질: 인청동 또는 강철\n\n스크류의 미는 힘을 이동 죠에 균일하게 전달하는 압력 슬리브입니다. 마찰을 줄이는 베어링 역할을 하기도 합니다."},
+            ]
+        },
+        "4": {
+            name: "RobotArm",
+            parts: [
+                { id: "Baser", url: "/models/RobotArm/로봇 베이스.glb", defaultPos: [0, 0, 0], direction: [0, 0, 0], rotation: [0, 0, 0], description: "재질: 주철 또는 강철\n\n로봇 팔 전체를 바닥이나 작업대에 고정하는 베이스입니다. 로봇의 무게와 동작 시 발생하는 반동을 견고하게 지지합니다."},
+                { id: "Part2r", url: "/models/RobotArm/베이스 회전 조인트.glb", defaultPos: [0.0000, 0.0821, -0.0000], direction: [0, 0.3, 0], rotation: [0.0000, 1.5550, 0.0000], description: "재질: 알루미늄 합금\n\n로봇 팔의 1축(Axis 1)에 해당하며, 몸통 전체를 좌우로 회전시키는 관절 모듈입니다."},
+                { id: "Part3r", url: "/models/RobotArm/하부 암.glb", defaultPos: [0.1498, 0.2422, 0.0222], direction: [0, 0.3, 0.2], rotation: [1.5615, -0.6519, -0.0056], description: "재질: 알루미늄 합금\n\n로봇의 어깨 관절(Axis 2)과 연결된 하부 암(Lower Arm)입니다. 앞뒤로 움직이며 로봇의 작업 반경을 크게 결정하는 주요 링크입니다."},
+                { id: "Part4r", url: "/models/RobotArm/엘보 조인트.glb", defaultPos: [-0.1810, 0.4973, -0.0253], direction: [0, 0.3, 0], rotation: [-1.9292, 1.5260, 1.9288], description: "재질: 알루미늄 합금\n\n하부 암과 상부 암을 연결하는 팔꿈치(Axis 3) 관절입니다. 상하 움직임을 제어하여 높이와 거리를 조절합니다."},
+                { id: "Part5r", url: "/models/RobotArm/상부 암.glb", defaultPos: [0.1150, 0.5099, -0.0298], direction: [0.2, 0.3, 0], rotation: [-1.6017, 1.5257, 1.6016], description: "재질: 알루미늄 합금 또는 탄소섬유\n\n로봇의 상부 암(Upper Arm)입니다. 팔뚝 회전(Axis 4) 기능을 포함하여 복잡한 각도의 작업이 가능하게 합니다."},
+                { id: "Part6r", url: "/models/RobotArm/손목 회전 조인트.glb", defaultPos: [0.2629, 0.4971, -0.0299], direction: [0.3, 0, 0], rotation: [-1.5645, 0.4378, 1.5615], description: "재질: 알루미늄 합금\n\n손목을 위아래 또는 좌우로 꺾어주는 손목 관절(Axis 5)입니다. 말단 장치(End Effector)의 각도를 정밀하게 제어합니다."},
+                { id: "Part7r", url: "/models/RobotArm/손목 암.glb", defaultPos: [0.3098, 0.4755, -0.0293], direction: [0.4, -0.05, 0], rotation: [1.5474, 1.1308, -1.5497], description: "재질: 알루미늄 합금\n\n그리퍼가 부착되는 최종 손목 회전축(Axis 6)입니다. 360도 회전이 가능하여 물체의 방향을 자유롭게 조작할 수 있습니다."},
+                { id: "Part8-1r", url: "/models/RobotArm/그리퍼.glb", defaultPos: [0.3946, 0.4257, 0.0010], direction: [0.5, -0.09, 0.1], rotation: [-1.5636, 0.4342, 1.2922], description: "재질: 스테인리스 스틸 또는 알루미늄\n\n물건을 집거나 작업을 수행하는 말단 장치(End Effector)의 한쪽 날입니다. 용도에 따라 다양한 형태로 교체될 수 있습니다."},
+                { id: "Part8-2r", url: "/models/RobotArm/그리퍼.glb", defaultPos: [0.4023, 0.4414, -0.0569], direction: [0.5, -0.09, -0.1], rotation: [1.5767, -0.4456, 1.3316], description: "재질: 스테인리스 스틸 또는 알루미늄\n\n그리퍼의 반대쪽 날입니다. 공압이나 전동 모터에 의해 오므려지며 물체를 정밀하게 파지합니다."},
+            ]
+        },
+        "5": {
+            name: "RobotGripper",
+            parts: [
+                { id: "base_gear", url: "/models/RobotGripper/구동 기어.glb", defaultPos: [0.0076, 0.0178, -0.0027], direction: [0, 0, 0.05], rotation: [0.0000, -1.5706, 0.0000], description: "재질: 황동 또는 강철\n\n모터의 회전을 받아 그리퍼를 작동시키는 메인 구동 기어입니다. 내구성을 위해 금속 소재가 주로 사용됩니다."},
+                { id: "mounting_bracket", url: "/models/RobotGripper/베이스 장착 브라켓.glb", defaultPos: [0.0101, -0.0053, 0.0060], direction: [0, 0, 0.1], rotation: [-0.1133, 1.5241, 1.6775], description: "재질: 알루미늄 합금\n\n그리퍼 모듈 전체를 로봇 팔의 손목 부위에 연결하는 마운팅 브라켓입니다. 경량화를 위해 알루미늄이 선호됩니다."},
+                { id: "base_plate", url: "/models/RobotGripper/베이스 플레이트.glb", defaultPos: [0, 0, 0], direction: [0, 0, 0], rotation: [0, 0, 0], description: "재질: 알루미늄 합금\n\n기어, 링크, 죠 등 모든 그리퍼 부품이 조립되는 바닥판입니다. 전체 구조의 강성을 담당합니다."},
+                { id: "gear_link_1", url: "/models/RobotGripper/기어 연동 링크 1.glb", defaultPos: [0.0136, 0.0378, 0.0048], direction: [0.05, 0.05, 0], rotation: [1.5754, -0.0569, -1.5434], description: "재질: 스테인리스 스틸\n\n회전 운동을 집게의 직선 또는 오므리는 운동으로 변환해주는 1차 링크입니다."},
+                { id: "gear_link_2", url: "/models/RobotGripper/기어 연동 링크 2.glb", defaultPos: [-0.0136, 0.0378, 0.0062], direction: [-0.05, 0.05, 0], rotation: [-3.1374, -0.0061, -1.7756], description: "재질: 스테인리스 스틸\n\n반대쪽 집게를 작동시키는 대칭형 링크입니다. 양쪽 집게가 동시에 움직이도록 동기화합니다."},
+                { id: "link_L", url: "/models/RobotGripper/링크 암.glb", defaultPos: [-0.0064, 0.0740, 0.0048], direction: [-0.05, 0.1, 0], rotation: [-1.5713, -0.0883, -1.5496], description: "재질: 알루미늄 합금\n\n기어 링크와 그리퍼 죠를 연결하는 중간 링크 암입니다. 지렛대 원리를 이용해 파지력을 증대시킵니다."},
+                { id: "link_R", url: "/models/RobotGripper/링크 암.glb", defaultPos: [0.0060, 0.0739, 0.0049], direction: [0.05, 0.1, 0], rotation: [-1.5634, 0.0671, -1.5615], description: "재질: 알루미늄 합금\n\n우측 링크 암입니다. 정밀한 공차로 제작되어야 그리퍼 끝단의 유격이 줄어듭니다."},
+                { id: "gripper_L", url: "/models/RobotGripper/그리퍼 죠.glb", defaultPos: [-0.0031, 0.0870, 0.0000], direction: [-0.05, 0.05, -0.05], rotation: [-0.0002, 0.0284, 1.1878], description: "재질: 알루미늄 (고무 패드 부착 가능)\n\n실제로 물체와 접촉하는 좌측 죠(Jaw)입니다. 표면 마찰력을 높이기 위해 고무 패드가 부착되기도 합니다."},
+                { id: "gripper_R", url: "/models/RobotGripper/그리퍼 죠.glb", defaultPos: [0.0027, 0.0870, 0.0012], direction: [0.05, 0.05, -0.05], rotation: [-3.1414, -0.0374, -1.9538], description: "재질: 알루미늄 (고무 패드 부착 가능)\n\n우측 죠입니다. 평행 개폐형(Parallel) 또는 부채꼴 개폐형(Angular)으로 동작합니다."},
+                { id: "Pin_01", url: "/models/RobotGripper/힌지 핀.glb", defaultPos: [0.0052, 0.0585, 0.0024], direction: [0, 0, 0.2], rotation: [3.1416, -1.5402, 3.1416], description: "재질: 경화강 (Hardened Steel)\n\n각 링크들의 관절 역할을 하는 힌지 핀입니다. 마모를 줄이기 위해 표면 경화 처리되었습니다."},
+                { id: "Pin_02", url: "/models/RobotGripper/힌지 핀.glb", defaultPos: [-0.0075, 0.0895, 0.0024], direction: [0, 0, 0.2], rotation: [3.1416, -1.5402, 3.1416], description: "재질: 경화강 (Hardened Steel)\n\n링크 연결부 핀입니다. 스냅 링(E-ring) 등으로 빠지지 않게 고정됩니다."},
+                { id: "Pin_03", url: "/models/RobotGripper/힌지 핀.glb", defaultPos: [0.0154, 0.0689, 0.0020], direction: [0, 0, 0.2], rotation: [3.1416, -1.5402, 3.1416], description: "재질: 경화강 (Hardened Steel)\n\n주요 관절 핀입니다. 반복적인 움직임에도 마모되지 않도록 높은 경도를 가집니다."},
+                { id: "Pin_04", url: "/models/RobotGripper/힌지 핀.glb", defaultPos: [-0.0154, 0.0689, 0.0020], direction: [0, 0, 0.2], rotation: [3.1416, -1.5402, 3.1416], description: "재질: 경화강 (Hardened Steel)\n\n대칭되는 위치의 힌지 핀입니다."},
+                { id: "Pin_05", url: "/models/RobotGripper/힌지 핀.glb", defaultPos: [0.0073, 0.0894, 0.0024], direction: [0, 0, 0.2], rotation: [3.1416, -1.5402, 3.1416], description: "재질: 경화강 (Hardened Steel)\n\n그리퍼 죠의 움직임을 지지하는 핀입니다."},
+                { id: "Pin_06", url: "/models/RobotGripper/힌지 핀.glb", defaultPos: [-0.0136, 0.0377, 0.0025], direction: [0, 0, 0.2], rotation: [3.1416, -1.5402, 3.1416], description: "재질: 경화강 (Hardened Steel)\n\n구동 기어와 링크를 연결하는 핀입니다."},
+                { id: "Pin_07", url: "/models/RobotGripper/힌지 핀.glb", defaultPos: [0.0141, 0.0377, 0.0025], direction: [0, 0, 0.2], rotation: [3.1416, -1.5402, 3.1416], description: "재질: 경화강 (Hardened Steel)\n\n반대쪽 구동 연결 핀입니다."},
+                { id: "Pin_08", url: "/models/RobotGripper/힌지 핀.glb", defaultPos: [-0.0048, 0.0584, 0.0024], direction: [0, 0, 0.2], rotation: [3.1416, -1.5402, 3.1416], description: "재질: 경화강 (Hardened Steel)\n\n중간 링크 연결 핀입니다."},
+                { id: "Pin_09", url: "/models/RobotGripper/힌지 핀.glb", defaultPos: [0.0053, 0.0034, 0.0022], direction: [0, 0, 0.2], rotation: [3.1416, -1.5402, 3.1416], description: "재질: 경화강 (Hardened Steel)\n\n베이스 플레이트 고정용 핀일 수 있습니다."},
+                { id: "Pin_10", url: "/models/RobotGripper/힌지 핀.glb", defaultPos: [-0.0053, 0.0034, 0.0022], direction: [0, 0, 0.2], rotation: [3.1416, -1.5402, 3.1416], description: "재질: 경화강 (Hardened Steel)\n\n마지막 연결 핀입니다. 모든 핀은 정밀한 동작을 위해 유격 없이 조립되어야 합니다."},
+            ]
+        },
+        "6": {
+            name: "Suspension",
+            parts: [
+                { id: "Bases", url: "/models/Suspension/하부 마운트.glb", defaultPos: [0, 0.028, 0], direction: [0, 0, 0], rotation: [0.6156, 0.0000, 0.0000], description: "재질: 강철 또는 알루미늄 합금\n\n서스펜션의 하단부를 바퀴 축이나 컨트롤 암에 고정하는 베이스 마운트입니다."},
+                { id: "Nut", url: "/models/Suspension/조절 너트.glb", defaultPos: [0.0000, 0.1118, 0.0589], direction: [0, 0.28, 0.2], rotation: [0.6171, 0.0000, 0.0000], description: "재질: 강철 (아연 도금)\n\n스프링의 압축 강도(Preload)를 조절하는 너트입니다. 차량의 높이나 승차감을 튜닝할 때 사용합니다."},
+                { id: "Rod", url: "/models/Suspension/피스톤 로드.glb", defaultPos: [-0.0001, 0.1198, 0.0646], direction: [0, 0.14, 0.1], rotation: [0.6156, 0.0000, 0.0000], description: "재질: 크롬 도금 강철\n\n쇽업쇼버 내부의 오일이나 가스를 통과하며 진동을 억제하는 피스톤 로드입니다. 내마모성을 위해 표면이 매우 매끄럽게 처리되었습니다."},
+                { id: "Spring", url: "/models/Suspension/코일 스프링.glb", defaultPos: [-0.0001, 0.0306, 0.0015], direction: [0, 0.07, 0.05], rotation: [0.6156, 0.0000, 0.0000], description: "재질: 스프링강 (SiCr Steel)\n\n노면의 충격을 1차적으로 흡수하여 차체를 지지하는 코일 스프링입니다. 탄성 계수에 따라 서스펜션의 특성이 달라집니다."},
+            ]
+        },
+        "7": {
+            name: "V4_Engine",
+            parts: [
+                { id: "CRodCap1", url: "/models/V4_Engine/커넥팅 로드 캡.glb", defaultPos: [0.1557, 0.1741, 0.0355], direction: [0, -0.1, 0], rotation: [2.9430, -1.5665, 3.1415], description: "재질: 단조강 (Forged Steel)\n\n커넥팅 로드의 하단을 크랭크축에 고정하는 캡입니다. 내부에는 마찰을 줄이기 위한 베어링 메탈이 장착됩니다."},
+                { id: "CRodCap2", url: "/models/V4_Engine/커넥팅 로드 캡.glb", defaultPos: [0.2708, 0.2261, -0.0355], direction: [0, -0.1, 0], rotation: [-2.9596, -1.5665, 3.1415], description: "재질: 단조강 (Forged Steel)\n\n2번 실린더의 커넥팅 로드 캡입니다. 고속 회전 시 발생하는 엄청난 인장 하중을 견뎌야 합니다."},
+                { id: "CRodCap3", url: "/models/V4_Engine/커넥팅 로드 캡.glb", defaultPos: [0.3838, 0.2261, -0.0355], direction: [0, -0.1, 0], rotation: [-2.9596, -1.5665, 3.1415], description: "재질: 단조강 (Forged Steel)\n\n3번 실린더용 캡입니다. 조립 시 짝이 맞는 로드와 정확한 방향으로 체결해야 합니다."},
+                { id: "CRodCap4", url: "/models/V4_Engine/커넥팅 로드 캡.glb", defaultPos: [0.4984, 0.1741, 0.0355], direction: [0, -0.1, 0], rotation: [2.9430, -1.5665, 3.1415], description: "재질: 단조강 (Forged Steel)\n\n4번 실린더용 캡입니다. V4 엔진의 특성상 강한 내구성이 요구되는 부품입니다."},
+                { id: "CRod1", url: "/models/V4_Engine/커넥팅 로드.glb", defaultPos: [0.1557, 0.3712, -0.0042], direction: [0, 0.3, -0.03], rotation: [2.9430, -1.5665, 3.1415], description: "재질: 단조강 (Forged Steel)\n\n피스톤의 직선 왕복 운동을 크랭크축의 회전 운동으로 변환해주는 커넥팅 로드입니다. 높은 강성과 인성이 필수적입니다."},
+                { id: "CRod2", url: "/models/V4_Engine/커넥팅 로드.glb", defaultPos: [0.2708, 0.4240, 0.0008], direction: [0, 0.3, 0.03], rotation: [-2.9596, -1.5665, 3.1415], description: "재질: 단조강 (Forged Steel)\n\n2번 피스톤과 연결되는 로드입니다. 강성을 유지하면서도 관성력을 줄이기 위해 I형 단면으로 제작됩니다."},
+                { id: "CRod3", url: "/models/V4_Engine/커넥팅 로드.glb", defaultPos: [0.3838, 0.4240, 0.0008], direction: [0, 0.3, 0.03], rotation: [-2.9596, -1.5665, 3.1415], description: "재질: 단조강 (Forged Steel)\n\n3번 피스톤 로드입니다. 고성능 엔진에서는 티타늄 합금이 사용되기도 합니다."},
+                { id: "CRod4", url: "/models/V4_Engine/커넥팅 로드.glb", defaultPos: [0.4984, 0.3712, -0.0042], direction: [0, 0.3, -0.03], rotation: [2.9430, -1.5665, 3.1415], description: "재질: 단조강 (Forged Steel)\n\n4번 피스톤 로드입니다. 엔진의 폭발력을 직접 받아내는 부품 중 하나입니다."},
+                { id: "Bolt1", url: "/models/V4_Engine/커넥팅 로드 볼트.glb", defaultPos: [0.1557, 0.2110, 0.0669], direction: [0, 0.45, -0.06], rotation: [2.9430, -1.5665, 3.1415], description: "재질: 고장력강 (High Tensile Steel)\n\n커넥팅 로드와 캡을 결합하는 특수 볼트입니다. 소성 변형 영역까지 조이는 각도법이 주로 사용됩니다."},
+                { id: "Bolt2", url: "/models/V4_Engine/커넥팅 로드 볼트.glb", defaultPos: [0.1557, 0.1959, -0.0076], direction: [0, 0.45, -0.06], rotation: [2.9430, -1.5665, 3.1415], description: "재질: 고장력강 (High Tensile Steel)\n\n1번 로드의 반대쪽 볼트입니다."},
+                { id: "Bolt3", url: "/models/V4_Engine/커넥팅 로드 볼트.glb", defaultPos: [0.2708, 0.2487, 0.0070], direction: [0, 0.45, 0.06], rotation: [-2.9596, -1.5665, 3.1415], description: "재질: 고장력강 (High Tensile Steel)\n\n2번 로드 볼트입니다."},
+                { id: "Bolt4", url: "/models/V4_Engine/커넥팅 로드 볼트.glb", defaultPos: [0.2708, 0.2624, -0.0676], direction: [0, 0.45, 0.06], rotation: [-2.9596, -1.5665, 3.1415], description: "재질: 고장력강 (High Tensile Steel)\n\n2번 로드 반대쪽 볼트입니다."},
+                { id: "Bolt5", url: "/models/V4_Engine/커넥팅 로드 볼트.glb", defaultPos: [0.3838, 0.2487, 0.0070], direction: [0, 0.45, 0.06], rotation: [-2.9596, -1.5665, 3.1415], description: "재질: 고장력강 (High Tensile Steel)\n\n3번 로드 볼트입니다."},
+                { id: "Bolt6", url: "/models/V4_Engine/커넥팅 로드 볼트.glb", defaultPos: [0.3838, 0.2624, -0.0676], direction: [0, 0.45, 0.06], rotation: [-2.9596, -1.5665, 3.1415], description: "재질: 고장력강 (High Tensile Steel)\n\n3번 로드 반대쪽 볼트입니다."},
+                { id: "Bolt7", url: "/models/V4_Engine/커넥팅 로드 볼트.glb", defaultPos: [0.4984, 0.2110, 0.0669], direction: [0, 0.45, -0.06], rotation: [2.9430, -1.5665, 3.1415], description: "재질: 고장력강 (High Tensile Steel)\n\n4번 로드 볼트입니다."},
+                { id: "Bolt8", url: "/models/V4_Engine/커넥팅 로드 볼트.glb", defaultPos: [0.4984, 0.1959, -0.0076], direction: [0, 0.45, -0.06], rotation: [2.9430, -1.5665, 3.1415], description: "재질: 고장력강 (High Tensile Steel)\n\n4번 로드 반대쪽 볼트입니다. 엔진 오버홀 시 반드시 신품으로 교체해야 하는 1회성 부품인 경우가 많습니다."},
+                { id: "CS", url: "/models/V4_Engine/크랭크샤프트.glb", defaultPos: [0, 0.2, 0], direction: [0, 0, 0], rotation: [-0.9394, 0.0000, 0.0000], description: "재질: 단조강 또는 주철\n\n커넥팅 로드를 통해 전달된 왕복 운동을 회전 운동으로 바꾸는 크랭크샤프트입니다. 엔진 출력을 전달하는 핵심 축입니다."},
+                { id: "PP1", url: "/models/V4_Engine/피스톤 핀.glb", defaultPos: [0.1963, 0.3712, -0.0042], direction: [-0.5, 0, 0], rotation: [0.0000, 1.5675, 0.0000], description: "재질: 표면 경화강 (Case Hardened Steel)\n\n피스톤과 커넥팅 로드를 연결하는 중공축 핀입니다. 가볍고 튼튼하며 마찰에 강해야 합니다."},
+                { id: "PP2", url: "/models/V4_Engine/피스톤 핀.glb", defaultPos: [0.3114, 0.4240, 0.0008], direction: [-0.5, 0, 0], rotation: [0.0000, 1.5675, 0.0000], description: "재질: 표면 경화강 (Case Hardened Steel)\n\n2번 피스톤 핀입니다."},
+                { id: "PP3", url: "/models/V4_Engine/피스톤 핀.glb", defaultPos: [0.4248, 0.4240, 0.0008], direction: [0.5, 0, 0], rotation: [0.0000, 1.5675, 0.0000], description: "재질: 표면 경화강 (Case Hardened Steel)\n\n3번 피스톤 핀입니다."},
+                { id: "PP4", url: "/models/V4_Engine/피스톤 핀.glb", defaultPos: [0.5398, 0.3712, -0.0042], direction: [0.5, 0, 0], rotation: [0.0000, 1.5675, 0.0000], description: "재질: 표면 경화강 (Case Hardened Steel)\n\n4번 피스톤 핀입니다."},
+                { id: "PR1", url: "/models/V4_Engine/피스톤 링.glb", defaultPos: [0.1557, 0.4225, -0.0042], direction: [0, 0.4, 0], rotation: [0, 0, 0], description: "재질: 특수 주철 또는 강철\n\n연소실의 압력이 새어나가지 않도록 막아주고, 실린더 벽의 오일을 긁어내리는 역할을 하는 피스톤 링입니다."},
+                { id: "PR2", url: "/models/V4_Engine/피스톤 링.glb", defaultPos: [0.1557, 0.4109, -0.0042], direction: [0, 0.4, 0], rotation: [0, 0, 0], description: "재질: 특수 주철 또는 강철\n\n보통 상단에는 압축 링, 하단에는 오일 링이 장착됩니다."},
+                { id: "PR3", url: "/models/V4_Engine/피스톤 링.glb", defaultPos: [0.1557, 0.3993, -0.0042], direction: [0, 0.4, 0], rotation: [0, 0, 0], description: "재질: 특수 주철 또는 강철\n\n실린더 벽면의 윤활유막 두께를 조절하여 엔진 소착을 방지합니다."},
+                { id: "PR4", url: "/models/V4_Engine/피스톤 링.glb", defaultPos: [0.2708, 0.4753, 0.0008], direction: [0, 0.4, 0], rotation: [0, 0, 0], description: "재질: 특수 주철 또는 강철\n\n2번 피스톤의 링 세트입니다."},
+                { id: "PR5", url: "/models/V4_Engine/피스톤 링.glb", defaultPos: [0.3838, 0.4753, 0.0008], direction: [0, 0.4, 0], rotation: [0, 0, 0], description: "재질: 특수 주철 또는 강철\n\n3번 피스톤의 링 세트입니다."},
+                { id: "PR6", url: "/models/V4_Engine/피스톤 링.glb", defaultPos: [0.4984, 0.4225, -0.0042], direction: [0, 0.4, 0], rotation: [0, 0, 0], description: "재질: 특수 주철 또는 강철\n\n4번 피스톤의 링 세트입니다."},
+                { id: "Piston1", url: "/models/V4_Engine/피스톤.glb", defaultPos: [0.1557, 0.3441, -0.0042], direction: [0, 0.4, 0], rotation: [-3.1416, 1.5644, -3.1416], description: "재질: 알루미늄 합금 (Cast Aluminum)\n\n연소실에서 폭발 압력을 직접 받아 운동 에너지로 변환하는 피스톤입니다. 고온 고압을 견뎌야 합니다."},
+                { id: "Piston2", url: "/models/V4_Engine/피스톤.glb", defaultPos: [0.2708, 0.3969, 0.0008], direction: [0, 0.4, 0], rotation: [-3.1416, 1.5644, -3.1416], description: "재질: 알루미늄 합금 (Cast Aluminum)\n\n2번 피스톤입니다. V4 엔진은 실린더가 V자 형태로 배치되어 컴팩트한 크기를 가집니다."},
+                { id: "Piston3", url: "/models/V4_Engine/피스톤.glb", defaultPos: [0.3838, 0.3969, 0.0008], direction: [0, 0.4, 0], rotation: [-3.1416, 1.5644, -3.1416], description: "재질: 알루미늄 합금 (Cast Aluminum)\n\n3번 피스톤입니다. 피스톤 상단의 형상은 연소 효율을 결정짓는 중요한 요소입니다."},
+                { id: "Piston4", url: "/models/V4_Engine/피스톤.glb", defaultPos: [0.4984, 0.3441, -0.0042], direction: [0, 0.4, 0], rotation: [-3.1416, 1.5644, -3.1416], description: "재질: 알루미늄 합금 (Cast Aluminum)\n\n4번 피스톤입니다."},
+            ]
+        }
+    };
+
 
     const currentModel = MODEL_DATA[id] || MODEL_DATA["1"];
     const assemblyParts = currentModel.parts.length > 0 ? currentModel.parts : (MODEL_DATA["1"].parts || []);
@@ -1596,13 +809,13 @@ export default function StudyPage() {
 
                     <div className="flex-1 relative">
                         <Canvas
-                        	shadows
-                                camera={{ fov: 35 }}
-                                className="bg-transparent"
-                                gl={{ preserveDrawingBuffer: true }}
-                                onPointerMissed={(e) => {
-                        		if (e.type === 'click') setSelectedId(null);
-                                }}
+                            shadows
+                            camera={{ fov: 35 }}
+                            className="bg-transparent"
+                            gl={{ preserveDrawingBuffer: true }}
+                            onPointerMissed={(e) => {
+                                if (e.type === 'click') setSelectedId(null);
+                            }}
                         >
                             <Suspense fallback={null}>
                                 <CameraPersister
